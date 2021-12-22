@@ -70,9 +70,9 @@ int main(int argc, char **argv)
 		std::shared_ptr<std::string> strings[] =
 		{
 			pool.emplace("string1"),
-			/*pool->emplace("string2 boogaloo"),
-			pool->emplace("string3 extra fancy"),
-			pool->emplace("string4 the inevitable end of all things"),*/
+			pool.emplace("string2 boogaloo"),
+			pool.emplace("string3 extra fancy"),
+			pool.emplace("string4 the inevitable end of all things"),
 		};
 
 		std::cout << "String unmanaged pool test:" << std::endl;

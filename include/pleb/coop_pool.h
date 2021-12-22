@@ -206,14 +206,14 @@ namespace coop
 
 			using value_type = T;
 			
+			class iterator;
+			
 			//using iterator = slot_iterator<T, pool<T>>;
 
 		private:
 			using slot = unmanaged::slot<T>;
 			
 			using buffer = unmanaged::buffer<T, basic_capacity>;
-
-			class iterator;
 
 			class buffer_chain
 			{

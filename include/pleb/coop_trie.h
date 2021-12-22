@@ -59,7 +59,7 @@ namespace coop
 				child will create a subtrie if it does not exist.
 		*/
 		[[nodiscard]] std::shared_ptr<trie_> find_child(std::string_view id) noexcept    {return _children.get(id);}
-		[[nodiscard]] std::shared_ptr<trie_> get_child (std::string_view id) noexcept    {return _children.acquire<constructor>(id, *this);}
+		[[nodiscard]] std::shared_ptr<trie_> get_child (std::string_view id) noexcept    {return _children.template acquire<constructor>(id, *this);}
 		//[[nodiscard]] std::shared_ptr<trie_> operator[](std::string_view id) noexcept    {return get_child(id);}
 
 
