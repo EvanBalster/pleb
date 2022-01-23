@@ -61,10 +61,7 @@ namespace pleb
 		// Access the root topic.
 		static topic_ptr root() noexcept                   {static topic_ptr root = _asTopic(_trie::create()); return root;}
 
-		~topic()
-		{
-			std::cout << "topic destroyed" << std::endl;
-		}
+		~topic() {}
 
 		// Access the parent topic (root's parent is null)
 		topic_ptr parent() noexcept                        {return _asTopic(_trie::parent());}
