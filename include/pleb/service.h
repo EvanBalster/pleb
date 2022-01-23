@@ -70,9 +70,9 @@ namespace pleb
 
 		// Publish something to this topic or a subtopic.
 		template<typename T>
-		bool request(                   T &&item) const    {auto svc = _trie::lock(); if (!svc) return false; svc->func(std::move(item)); return true;}
+		bool request(                   T &&item)    {auto svc = _trie::lock(); if (!svc) return false; svc->func(std::move(item)); return true;}
 		template<typename T>
-		bool request(path_view subpath, T &&item) const    {return this->subpath(subpath).request(std::move(item));}
+		bool request(path_view subpath, T &&item)    {return this->subpath(subpath)->request(std::move(item));}
 
 		// Create a subscription to this topic and all subtopics, or a subtopic and its subtopics.
 		std::shared_ptr<service> serve(                          function_type &&function) noexcept    {return _trie::try_emplace(shared_from_this(), std::move(function));}
@@ -92,13 +92,11 @@ namespace pleb
 	};
 
 
-
-	template<typename T>
 	static std::shared_ptr<service> serve(
 		std::string_view   path,
 		function_any_ref &&function) noexcept
 	{
-		return pleb::resource<T>::root().subscribe(path, std::move(function));
+		return pleb::resource::root()->serve(path, std::move(function));
 	}
 
 	template<typename T>
@@ -106,6 +104,6 @@ namespace pleb
 		std::string_view path,
 		T              &&item) noexcept
 	{
-		return pleb::resource<T>::root().request(topic, std::move(item));
+		return pleb::resource::root()->request(path, std::move(item));
 	}
 }
