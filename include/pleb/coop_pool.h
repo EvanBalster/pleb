@@ -115,6 +115,7 @@ namespace coop
 			bool operator==(const slot_iterator &o) const noexcept    {return _slot==o._slot;}
 			bool operator!=(const slot_iterator &o) const noexcept    {return _slot!=o._slot;}
 
+			value_type *operator->()                const noexcept    {return &*_element;}
 			value_type &operator*()                 const noexcept    {return *_element;}
 			operator std::shared_ptr<value_type>()  const noexcept    {return _element;}
 
@@ -425,8 +426,9 @@ namespace coop
 		public:
 			using unmanaged_pool::iterator::iterator;
 
-			value_type                   &operator*() const noexcept    {return this->_element->value;}
-			std::shared_ptr<element_type> element()   const noexcept    {return this->_element;}
+			value_type                   *operator->() const noexcept    {return &this->_element->value;}
+			value_type                   &operator* () const noexcept    {return  this->_element->value;}
+			std::shared_ptr<element_type> element()    const noexcept    {return  this->_element;}
 		};
 
 

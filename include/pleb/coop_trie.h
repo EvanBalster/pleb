@@ -56,10 +56,10 @@ namespace coop
 		/*
 			Access an immediate child by its identifier at this leve in the trie.
 				try_child may fail, returning null.
-				child will create a subtrie if it does not exist.
+				get_child will create a subtrie if it does not exist.
 		*/
-		[[nodiscard]] std::shared_ptr<trie_> find_child(std::string_view id) noexcept    {return _children.get(id);}
-		[[nodiscard]] std::shared_ptr<trie_> get_child (std::string_view id) noexcept    {return _children.template acquire<constructor>(id, *this);}
+		[[nodiscard]] std::shared_ptr<trie_> try_child(std::string_view id) noexcept    {return _children.get(id);}
+		[[nodiscard]] std::shared_ptr<trie_> get_child(std::string_view id) noexcept    {return _children.template acquire<constructor>(id, *this);}
 		//[[nodiscard]] std::shared_ptr<trie_> operator[](std::string_view id) noexcept    {return get_child(id);}
 
 
@@ -110,7 +110,7 @@ namespace coop
 			for (std::string_view id : path)
 			{
 				if (!id.length()) continue;
-				auto next = node->find_child(id);
+				auto next = node->try_child(id);
 				if (Nearest)    {if (!next) break; node.swap(next);}
 				else            {node.swap(next); if (!node) break;}
 			}

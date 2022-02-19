@@ -24,11 +24,13 @@ namespace pleb
 		Events are organized under a topic -- a slash-delimited string.
 	*/
 	class topic;
+	class subscription;
 
 	/*
 		High-performance code 
 	*/
 	using topic_ptr = std::shared_ptr<topic>;
+	using subscription_ptr = std::shared_ptr<subscription>;
 
 	/*
 		Minimal pub/sub system.
@@ -37,12 +39,12 @@ namespace pleb
 	class subscription
 	{
 	public:
-		subscription(std::shared_ptr<topic> _topic, function_any_const &&_func)
+		subscription(std::shared_ptr<topic> _topic, observer_function &&_func)
 			:
 			topic(std::move(_topic)), func(std::move(_func)) {}
 
 		const std::shared_ptr<topic> topic;
-		const function_any_const     func;
+		const observer_function      func;
 	};
 
 	/*
@@ -52,14 +54,15 @@ namespace pleb
 		protected coop::unmanaged::multitrie<subscription>
 	{
 	public:
-		using function_type = function_any_const;
-
 		using subscription = pleb::subscription;
 
 
 	public:
 		// Access the root topic.
 		static topic_ptr root() noexcept                   {static topic_ptr root = _asTopic(_trie::create()); return root;}
+
+		// Access a topic by path.
+		static topic_ptr find(path_view path) noexcept    {return root()->subtopic(path);}
 
 		~topic() {}
 
@@ -84,8 +87,8 @@ namespace pleb
 		}
 
 		// Create a subscription to this topic and all subtopics, or a subtopic and its subtopics.
-		std::shared_ptr<subscription> subscribe_all(                    function_type &&f) noexcept    {return this->emplace(shared_from_this(), std::move(f));}
-		std::shared_ptr<subscription> subscribe    (path_view subtopic, function_type &&f) noexcept    {return this->subtopic(subtopic)->subscribe_all(std::move(f));}
+		std::shared_ptr<subscription> subscribe_all(                    observer_function &&f) noexcept    {return this->emplace(shared_from_this(), std::move(f));}
+		std::shared_ptr<subscription> subscribe    (path_view subtopic, observer_function &&f) noexcept    {return this->subtopic(subtopic)->subscribe_all(std::move(f));}
 
 
 		// Support shared_from_this
@@ -117,10 +120,20 @@ namespace pleb
 	*/
 	inline std::shared_ptr<subscription>
 		subscribe(
-			std::string_view     topic,
-			function_any_const &&function) noexcept
+			std::string_view    topic,
+			observer_function &&function) noexcept
 	{
 		return pleb::topic::root()->subscribe(topic, std::move(function));
+	}
+
+	template<class T>
+	static std::shared_ptr<service>
+		subscribe(
+			std::string_view path,
+			T               *handler_object,
+			void        (T::*handler_method)(std::any&))
+	{
+		return serve(path, std::bind(handler_method, handler_object, std::placeholders::_1));
 	}
 
 	template<typename T>

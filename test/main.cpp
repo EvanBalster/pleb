@@ -3,8 +3,8 @@
 
 //#include <pleb/aro_pool.h>
 #include <pleb/pleb_base.h>
-#include <pleb/pleb_pubsub.h>
-#include <pleb/pleb_service.h>
+#include <pleb/resource.h>
+#include <pleb/topic.h>
 
 #if 0
 class pool_tester;
@@ -81,7 +81,7 @@ int main(int argc, char **argv)
 	}
 
 	{
-		auto canPrintString = pleb::subscribe("print/string", pleb::function_any_const(&printString));
+		auto canPrintString = pleb::subscribe("print/string", pleb::observer_function(&printString));
 
 		pleb::publish("print/string", std::string("this is a fancy string"));
 	}
