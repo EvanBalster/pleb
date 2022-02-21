@@ -2,5 +2,5 @@
 
 
 
-#include "pleb_pubsub.h"
-#include "pleb_service.h"
+#include "resource.h"
+#include "topic.h"

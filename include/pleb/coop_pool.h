@@ -42,7 +42,6 @@ namespace coop
 		public:
 			using value_type = T;
 
-
 		public:
 			slot() : _access(0)  {}
 			~slot() {assert(empty());}

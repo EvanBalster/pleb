@@ -33,9 +33,9 @@ std::atomic<int> pool_tester::count = 0;
 #endif
 
 
-void printString(const std::any &string)
+void printString(const pleb::report &report)
 {
-	const std::string *str = std::any_cast<std::string>(&string);
+	auto *str = report.get<const std::string>();
 
 	if (str) std::cout << *str << std::endl;
 	else     std::cout << "printString: not a string" << std::endl;
@@ -81,7 +81,7 @@ int main(int argc, char **argv)
 	}
 
 	{
-		auto canPrintString = pleb::subscribe("print/string", pleb::observer_function(&printString));
+		auto canPrintString = pleb::subscribe("print/string", &printString);
 
 		pleb::publish("print/string", std::string("this is a fancy string"));
 	}

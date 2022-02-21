@@ -2,6 +2,7 @@
 
 
 #include "pleb_base.h"
+#include "conversion.h"
 
 
 /*
@@ -10,7 +11,7 @@
 
 	These classes do not provide asynchronous execution, futures or serialization;
 		those features can be implemented as part of the function wrapper.
-		Subscribers throwing an exception will halt processing of an event.
+		Subscribers throwing an exception will halt processing of a report.
 
 	TEARDOWN SAFETY NOTICE:
 		Calls may be in progress when the subscription is released.
@@ -27,28 +28,49 @@ namespace pleb
 	class subscription;
 
 	/*
-		High-performance code 
+		Topics and subscriptions are retained by shared pointers.
+			Topic pointers can be cached for repeated publishing.
 	*/
-	using topic_ptr = std::shared_ptr<topic>;
+	using topic_ptr        = std::shared_ptr<topic>;
 	using subscription_ptr = std::shared_ptr<subscription>;
 
 	/*
+		Reports are events or messages passed from publishers to subscribers.
+	*/
+	class report
+	{
+	public:
+		topic    &topic;
+		const int status; // Conventionally set to an HTTP status code, or zero.
+		std::any  value;
+
+	public:
+		// Access value as a specific type.
+		template<typename T> const T *cast() const noexcept    {return std::any_cast<T>(&value);}
+		template<typename T> T       *cast()       noexcept    {return std::any_cast<T>(&value);}
+
+		// Access value, allowing it to be supplied by value or shared_ptr.
+		template<typename T> const T *get() const noexcept    {return pleb::any_const_ptr<T>(value);}
+	};
+	using subscriber_function = std::function<void(const report&)>;
+
+	/*
 		Minimal pub/sub system.
-			Can be used for event broadcast and surveyor pattern.
+			Can be used for report broadcast and surveyor pattern.
 	*/
 	class subscription
 	{
 	public:
-		subscription(std::shared_ptr<topic> _topic, observer_function &&_func)
+		subscription(std::shared_ptr<topic> _topic, subscriber_function &&_func)
 			:
 			topic(std::move(_topic)), func(std::move(_func)) {}
 
 		const std::shared_ptr<topic> topic;
-		const observer_function      func;
+		const subscriber_function    func;
 	};
 
 	/*
-		A trie of topics is 
+		Topics form a global hierarchy (trie) to which 
 	*/
 	class topic :
 		protected coop::unmanaged::multitrie<subscription>
@@ -80,15 +102,16 @@ namespace pleb
 		template<typename T>
 		void publish(                           T &&item)
 		{
-			std::any any(std::move(item));
+			report report = {*this, 0, std::move(item)};
+
 			for (topic_ptr node = shared_from_this(); node; node = node->parent())
 				for (subscription &sub : (_trie::coop_type&) *node)
-					sub.func(any);
+					sub.func(report);
 		}
 
 		// Create a subscription to this topic and all subtopics, or a subtopic and its subtopics.
-		std::shared_ptr<subscription> subscribe_all(                    observer_function &&f) noexcept    {return this->emplace(shared_from_this(), std::move(f));}
-		std::shared_ptr<subscription> subscribe    (path_view subtopic, observer_function &&f) noexcept    {return this->subtopic(subtopic)->subscribe_all(std::move(f));}
+		std::shared_ptr<subscription> subscribe_all(                    subscriber_function &&f) noexcept    {return this->emplace(shared_from_this(), std::move(f));}
+		std::shared_ptr<subscription> subscribe    (path_view subtopic, subscriber_function &&f) noexcept    {return this->subtopic(subtopic)->subscribe_all(std::move(f));}
 
 
 		// Support shared_from_this
@@ -120,8 +143,8 @@ namespace pleb
 	*/
 	inline std::shared_ptr<subscription>
 		subscribe(
-			std::string_view    topic,
-			observer_function &&function) noexcept
+			std::string_view      topic,
+			subscriber_function &&function) noexcept
 	{
 		return pleb::topic::root()->subscribe(topic, std::move(function));
 	}
@@ -131,7 +154,7 @@ namespace pleb
 		subscribe(
 			std::string_view path,
 			T               *handler_object,
-			void        (T::*handler_method)(std::any&))
+			void        (T::*handler_method)(pleb::report&))
 	{
 		return serve(path, std::bind(handler_method, handler_object, std::placeholders::_1));
 	}

@@ -11,16 +11,6 @@
 
 namespace pleb
 {
-	/*
-		PLEB uses these generic function wrappers for all event handling.
-
-		handler_function may modify its argument or overwrite it to return a value.
-		observer_function accepts an immutable argument.
-	*/
-	using handler_function   = std::function<void(      std::any&)>;
-	using observer_function  = std::function<void(const std::any&)>;
-
-
 	template<char Delimiter> class path_view_;
 	using path_view = path_view_<'/'>;
 

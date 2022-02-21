@@ -7,9 +7,10 @@
 
 namespace coop
 {
+
 	/*
 		A concurrent wait-free atomic hashmap based on the split-ordered list technique,
-			with some differences:  most significant bits are used rather than bit reversal,
+			with some differences:  most significant bits are used rather than bit reversal...
 
 	*/
 	template<
