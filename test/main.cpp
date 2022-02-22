@@ -1,5 +1,6 @@
 #include <iostream>
 #include <thread>
+#include <variant>
 
 //#include <pleb/aro_pool.h>
 #include <pleb/pleb_base.h>
@@ -45,7 +46,6 @@ void printString(const pleb::report &report)
 int main(int argc, char **argv)
 {
 	//test_pool = test_pool_t::create();
-
 	std::string_view test_strings[] =
 	{
 		"tetrahedron",

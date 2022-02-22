@@ -150,7 +150,7 @@ namespace pleb
 	}
 
 	template<class T>
-	static std::shared_ptr<service>
+	inline std::shared_ptr<service>
 		subscribe(
 			std::string_view path,
 			T               *handler_object,
@@ -160,7 +160,7 @@ namespace pleb
 	}
 
 	template<typename T>
-	static void
+	inline void
 		publish(
 			std::string_view topic,
 			T              &&item) noexcept

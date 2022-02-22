@@ -1,6 +1,7 @@
 #pragma once
 
 
+#include <future>
 #include <exception>
 #include "pleb_base.h"
 
@@ -50,6 +51,16 @@ namespace pleb
 	using service_ptr = std::shared_ptr<service>;
 
 	/*
+		Replies may be produced in response to a request (see below)
+	*/
+	class reply
+	{
+	public:
+		int      status;
+		std::any value;
+	};
+
+	/*
 		Requests are messages directed at resources (fulfilled by services).
 	*/
 	enum class method
@@ -70,22 +81,32 @@ namespace pleb
 		resource    &resource;
 		const method method;
 		std::any     value;
-		int          status = 0;
-
-		// TODO optional reply-handling field
+		
+	private:
+		using promise_t = std::promise<pleb::reply>;
+		using future_t = std::future<pleb::reply>;
+		std::future<pleb::reply> *_reply;
 
 	public:
-		// Make a request with an empty value.
-		request(
-			pleb::resource &resource,
-			pleb::method    method = pleb::method::GET)    : request(resource, method, std::any()) {}
-
-		// Make a request with a value.
+		/*
+			Compose a request manually.
+		*/
 		template<typename T>
 		request(
-			pleb::resource &resource,
-			pleb::method    method,
-			T             &&value);
+			pleb::resource     &resource,
+			pleb::method        method,
+			T                 &&value,
+			std::future<reply> *reply = nullptr,
+			bool                process_now = true);
+
+		// Make a request to the given path with method and value.
+		template<typename T>
+		request(path_view path, pleb::method method, T &&value, std::future<reply> *reply = nullptr);
+
+
+		// Syntactic sugar:  Allow for  std::future<reply> reply = pleb::request(...)
+		operator std::future<pleb::reply>() const    {return _reply ? std::move(*_reply) : std::future<pleb::reply>();}
+
 
 		// Access value as a specific type.
 		template<typename T> const T *cast() const noexcept    {return std::any_cast<T>(&value);}
@@ -93,7 +114,26 @@ namespace pleb
 
 		// Access value, allowing it to be supplied by value or shared_ptr.
 		template<typename T> T *get() const noexcept    {return pleb::any_ptr<T>(value);}
+
+		/*
+			Post an immediate reply.
+		*/
+		template<class T = std::any>
+		void reply(int status = 200, T &&value = {}) const
+		{
+			if (!_reply) return;
+			promise_t p; p.set_value(pleb::reply{status, std::move(value)});
+			*_reply = p.get_future();
+		}
+
+		/*
+			Promise a later reply.
+		*/
+		std::promise<pleb::reply> promise()                               const    {promise_t p; promise(p.get_future()); return std::move(p);}
+		void                      promise(std::future<pleb::reply> reply) const    {if (_reply) *_reply = std::move(reply);}
 	};
+
+	
 
 	using service_function = std::function<void(request&)>;
 
@@ -136,23 +176,63 @@ namespace pleb
 		resource_ptr subpath(path_view subpath) noexcept    {return _asResource(_trie::get    (subpath));}
 		resource_ptr nearest(path_view subpath) noexcept    {return _asResource(_trie::nearest(subpath));}
 
-		// Process an already-constructed request.
-		void process(request &request)    {auto svc = _trie::lock(); if (!svc) throw errors::no_such_service("???"); svc->func(request);}
+		/*
+			Process a request.
+				pleb::request calls this method upon construction;
+				it can be used to process the same request again.
+		*/
+		void process(pleb::request &request)
+		{
+			if (auto svc = _trie::lock()) svc->func(request);
+			else throw errors::no_such_service("???");
+		}
 
-		// Publish something to this topic or a subtopic.
-		std::any get    ()                  {request r(*this, method::GET); return std::move(r.value);}
-		void     post   (std::any &item)    {request r(*this, method::POST, std::move(item)); item = std::move(r.value);}
-		void     patch  (std::any &item)    {request r(*this, method::PATCH, std::move(item)); item = std::move(r.value);}
-		std::any delete_()                  {request r(*this, method::DELETE); return std::move(r.value);}
+		/*
+			Request methods with asynchronous reply.
+		*/
+		template<typename T> [[nodiscard]]
+		std::future<reply> request(method method, T &&item)    {std::future<reply> r; pleb::request(*this, method, item, &r); return std::move(r);}
 
-		// Create a subscription to this topic and all subtopics, or a subtopic and its subtopics.
-		std::shared_ptr<service> serve(                          service_function &&function) noexcept    {return _trie::try_emplace(shared_from_this(), std::move(function));}
-		std::shared_ptr<service> serve(std::string_view subpath, service_function &&function) noexcept    {return this->subpath(subpath)->serve(std::move(function));}
+		[[nodiscard]]                  std::future<reply> request       ()         {return request(method::GET, std::any());}
+		[[nodiscard]]                  std::future<reply> request_get   ()         {return request(method::GET, std::any());}
+		template<class T> [[nodicard]] std::future<reply> request_post  (T &&v)    {return request(method::POST, std::move(item));}
+		template<class T> [[nodicard]] std::future<reply> request_patch (T &&v)    {return request(method::PATCH, std::move(item));}
+		[[nodicard]]                   std::future<reply> request_delete()         {return request(method::DELETE, std::any());}
+
+		/*
+			Request methods with synchronous (possibly blocking) reply.
+		*/
+		template<typename T> [[nodiscard]]
+		reply sync_request(method method, T &&item)    {return request(method, std::move(item)).get();}
+
+		[[nodiscard]]                  reply sync_get   ()         {return sync_request(method::GET, std::any());}
+		template<class T> [[nodicard]] reply sync_post  (T &&v)    {return sync_request(method::POST, std::move(item));}
+		template<class T> [[nodicard]] reply sync_patch (T &&v)    {return sync_request(method::PATCH, std::move(item));}
+		[[nodiscard]]                  reply sync_delete()         {return sync_request(method::DELETE, std::any());}
+
+		/*
+			Push methods; ie, request with no opportunity to reply.
+		*/
+		template<typename T>
+		void push(method method, T &&item)    {pleb::request r(*this, method, item, nullptr);}
+
+		template<class T> void push      (T &&v)    {request(method::POST, std::move(v));}
+		template<class T> void push_post (T &&v)    {request(method::POST, std::move(v));}
+		template<class T> void push_patch(T &&v)    {request(method::PATCH, std::move(v));}
+		void                   push_delete()        {request(method::DELETE, std::any());}
+
+
+		/*
+			Register a function to service this resource.
+				May fail, returning null, if a service is already registered.
+		*/
+		[[nodiscard]] std::shared_ptr<service> serve(                          service_function &&function) noexcept    {return _trie::try_emplace(shared_from_this(), std::move(function));}
+		[[nodiscard]] std::shared_ptr<service> serve(std::string_view subpath, service_function &&function) noexcept    {return this->subpath(subpath)->serve(std::move(function));}
 
 
 		// Support shared_from_this
-		resource_ptr                    shared_from_this()          {return resource_ptr                   (_trie::shared_from_this(), this);}
-		std::shared_ptr<const resource> shared_from_this() const    {return std::shared_ptr<const resource>(_trie::shared_from_this(), this);}
+		[[nodiscard]] resource_ptr                    shared_from_this()          {return resource_ptr                   (_trie::shared_from_this(), this);}
+		[[nodiscard]] std::shared_ptr<const resource> shared_from_this() const    {return std::shared_ptr<const resource>(_trie::shared_from_this(), this);}
 
 
 	private:
@@ -163,7 +243,7 @@ namespace pleb
 	};
 
 
-	static std::shared_ptr<service>
+	inline std::shared_ptr<service>
 		serve(
 			std::string_view   path,
 			service_function &&function) noexcept
@@ -171,8 +251,8 @@ namespace pleb
 		return pleb::resource::root()->serve(path, std::move(function));
 	}
 
-	template<class T>
-	static std::shared_ptr<service>
+	template<class T> [[nodiscard]]
+	inline std::shared_ptr<service>
 		serve(
 			std::string_view path,
 			T               *observer_object,
@@ -181,16 +261,36 @@ namespace pleb
 		return serve(path, std::bind(observer_method, observer_object, std::placeholders::_1));
 	}
 
-	template<typename T>
-	inline request::request(
-		pleb::resource &_resource,
-		pleb::method    _method,
-		T             &&_value)
-		:
-		resource(_resource),
-		method(_method),
-		value(std::move(_value))
-	{
-		resource.process(*this);
-	}
+	// Perform a manual request to the given path.
+	template<typename T> [[nodiscard]]
+	inline request::request(path_view path, pleb::method method, T &&value, std::future<pleb::reply> *reply) :
+		request(pleb::resource::root()->find(path), method, std::move(value), reply) {}
+
+	/*
+		Perform requests with asynchronous replies.
+	*/
+	[[nodiscard]] inline            std::future<reply> request_get   (path_view path)           {return pleb::resource::root()->find(path)->request_get();}
+	template<class T> [[nodiscard]] std::future<reply> request_post  (path_view path, T &&v)    {return pleb::resource::root()->find(path)->request_post(std::move(v));}
+	template<class T> [[nodiscard]] std::future<reply> request_patch (path_view path, T &&v)    {return pleb::resource::root()->find(path)->request_patch(std::move(v));}
+	[[nodiscard]] inline            std::future<reply> reqiest_delete(path_view path)           {return pleb::resource::root()->find(path)->request_delete();}
+
+	[[nodiscard]] inline            reply sync_get   (path_view path)           {return pleb::resource::root()->find(path)->sync_get();}
+	template<class T> [[nodiscard]] reply sync_post  (path_view path, T &&v)    {return pleb::resource::root()->find(path)->sync_post(std::move(v));}
+	template<class T> [[nodiscard]] reply sync_patch (path_view path, T &&v)    {return pleb::resource::root()->find(path)->sync_patch(std::move(v));}
+	[[nodiscard]] inline            reply sync_delete(path_view path)           {return pleb::resource::root()->find(path)->sync_delete();}
+}
+
+
+// Request constructor implementation
+template<typename T> [[nodiscard]]
+inline pleb::request::request(
+	pleb::resource          &_resource,
+	pleb::method             _method,
+	T                      &&_value,
+	std::future<pleb::reply> *reply,
+	bool                      process_now)
+	:
+	resource(_resource), method(_method), value(std::move(_value)), _reply(reply)
+{
+	if (process_now) resource.process(*this);
 }
