@@ -23,9 +23,9 @@ namespace coop
 			class node
 			{
 			private:
-				T value;
-
 				friend class forward_list;
+
+				T value;
 				std::atomic<node_slot*>               next;
 				std::atomic<std::atomic<node_slot*>*> prev;
 
@@ -86,17 +86,15 @@ namespace coop
 			forward_list()    : _head(&_tail) {_tail.try_emplace(_head);}
 
 			// Iterate over elements.
-			iterator begin()    {return iterator(_head);}
-			iterator end  ()    {return iterator();}
+			iterator begin()    {return iterator(_head.load(std::memory_order_acquire));}
+			iterator end  ()    {return iterator(&_tail);}
 
 			// Insert an element before the given iterator's position.
 			template<typename ... Args> [[nodiscard]]
 			std::shared_ptr<value_type> emplace(const iterator &pos, Args&& ... args)
 			{
-				node *new_node = alloc_node();
-				auto result = node->try_emplace(std::forward<Args>(args)...);
-				pos.insert(new_node, _head);
-				return result;
+				auto node_ptr = _pool.emplace(pos, std::forward<Args>(args)...);
+				return std::shared_ptr<T>(node_ptr, &node_ptr->value);
 			}
 
 			// Insert an element at the head of the list.
@@ -118,8 +116,7 @@ namespace coop
 		protected:
 			std::atomic<node_slot*> _head;
 			node_slot               _tail;
-
-			node *alloc_node();
+			pool<node>              _pool;
 		};
 	}
 
