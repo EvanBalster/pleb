@@ -193,11 +193,11 @@ namespace pleb
 		template<typename T> [[nodiscard]]
 		std::future<reply> request(method method, T &&item)    {std::future<reply> r; pleb::request(*this, method, item, &r); return std::move(r);}
 
-		[[nodiscard]]                  std::future<reply> request       ()         {return request(method::GET, std::any());}
-		[[nodiscard]]                  std::future<reply> request_get   ()         {return request(method::GET, std::any());}
-		template<class T> [[nodicard]] std::future<reply> request_post  (T &&v)    {return request(method::POST, std::move(item));}
-		template<class T> [[nodicard]] std::future<reply> request_patch (T &&v)    {return request(method::PATCH, std::move(item));}
-		[[nodicard]]                   std::future<reply> request_delete()         {return request(method::DELETE, std::any());}
+		[[nodiscard]]                   std::future<reply> request       ()         {return request(method::GET, std::any());}
+		[[nodiscard]]                   std::future<reply> request_get   ()         {return request(method::GET, std::any());}
+		template<class T> [[nodiscard]] std::future<reply> request_post  (T &&v)    {return request(method::POST, std::move(item));}
+		template<class T> [[nodiscard]] std::future<reply> request_patch (T &&v)    {return request(method::PATCH, std::move(item));}
+		[[nodiscard]]                   std::future<reply> request_delete()         {return request(method::DELETE, std::any());}
 
 		/*
 			Request methods with synchronous (possibly blocking) reply.
@@ -205,10 +205,10 @@ namespace pleb
 		template<typename T> [[nodiscard]]
 		reply sync_request(method method, T &&item)    {return request(method, std::move(item)).get();}
 
-		[[nodiscard]]                  reply sync_get   ()         {return sync_request(method::GET, std::any());}
-		template<class T> [[nodicard]] reply sync_post  (T &&v)    {return sync_request(method::POST, std::move(item));}
-		template<class T> [[nodicard]] reply sync_patch (T &&v)    {return sync_request(method::PATCH, std::move(item));}
-		[[nodiscard]]                  reply sync_delete()         {return sync_request(method::DELETE, std::any());}
+		[[nodiscard]]                   reply sync_get   ()         {return sync_request(method::GET, std::any());}
+		template<class T> [[nodiscard]] reply sync_post  (T &&v)    {return sync_request(method::POST, std::move(item));}
+		template<class T> [[nodiscard]] reply sync_patch (T &&v)    {return sync_request(method::PATCH, std::move(item));}
+		[[nodiscard]]                   reply sync_delete()         {return sync_request(method::DELETE, std::any());}
 
 		/*
 			Push methods; ie, request with no opportunity to reply.
@@ -216,18 +216,18 @@ namespace pleb
 		template<typename T>
 		void push(method method, T &&item)    {pleb::request r(*this, method, item, nullptr);}
 
-		template<class T> void push      (T &&v)    {request(method::POST, std::move(v));}
-		template<class T> void push_post (T &&v)    {request(method::POST, std::move(v));}
-		template<class T> void push_patch(T &&v)    {request(method::PATCH, std::move(v));}
-		void                   push_delete()        {request(method::DELETE, std::any());}
+		template<class T> void push      (T &&v)    {push(method::POST, std::move(v));}
+		template<class T> void push_post (T &&v)    {push(method::POST, std::move(v));}
+		template<class T> void push_patch(T &&v)    {push(method::PATCH, std::move(v));}
+		void                   push_delete()        {push(method::DELETE, std::any());}
 
 
 		/*
 			Register a function to service this resource.
 				May fail, returning null, if a service is already registered.
 		*/
-		[[nodiscard]] std::shared_ptr<service> serve(                          service_function &&function) noexcept    {return _trie::try_emplace(shared_from_this(), std::move(function));}
-		[[nodiscard]] std::shared_ptr<service> serve(std::string_view subpath, service_function &&function) noexcept    {return this->subpath(subpath)->serve(std::move(function));}
+		[[nodiscard]] std::shared_ptr<service> serve(                   service_function &&function) noexcept    {return _trie::try_emplace(shared_from_this(), std::move(function));}
+		[[nodiscard]] std::shared_ptr<service> serve(path_view subpath, service_function &&function) noexcept    {return this->subpath(subpath)->serve(std::move(function));}
 
 
 		// Support shared_from_this
@@ -243,20 +243,21 @@ namespace pleb
 	};
 
 
-	inline std::shared_ptr<service>
+	[[nodiscard]] inline
+	std::shared_ptr<service>
 		serve(
-			std::string_view   path,
+			path_view          path,
 			service_function &&function) noexcept
 	{
-		return pleb::resource::root()->serve(path, std::move(function));
+		return pleb::resource::find(path)->serve(std::move(function));
 	}
 
 	template<class T> [[nodiscard]]
-	inline std::shared_ptr<service>
+	std::shared_ptr<service>
 		serve(
-			std::string_view path,
-			T               *observer_object,
-			void        (T::*observer_method)(request&))
+			path_view path,
+			T        *observer_object,
+			void (T::*observer_method)(request&))
 	{
 		return serve(path, std::bind(observer_method, observer_object, std::placeholders::_1));
 	}
@@ -264,20 +265,25 @@ namespace pleb
 	// Perform a manual request to the given path.
 	template<typename T> [[nodiscard]]
 	inline request::request(path_view path, pleb::method method, T &&value, std::future<pleb::reply> *reply) :
-		request(pleb::resource::root()->find(path), method, std::move(value), reply) {}
+		request(pleb::resource::find(path), method, std::move(value), reply) {}
 
 	/*
 		Perform requests with asynchronous replies.
 	*/
-	[[nodiscard]] inline            std::future<reply> request_get   (path_view path)           {return pleb::resource::root()->find(path)->request_get();}
-	template<class T> [[nodiscard]] std::future<reply> request_post  (path_view path, T &&v)    {return pleb::resource::root()->find(path)->request_post(std::move(v));}
-	template<class T> [[nodiscard]] std::future<reply> request_patch (path_view path, T &&v)    {return pleb::resource::root()->find(path)->request_patch(std::move(v));}
-	[[nodiscard]] inline            std::future<reply> reqiest_delete(path_view path)           {return pleb::resource::root()->find(path)->request_delete();}
+	[[nodiscard]] inline            std::future<reply> request_get   (path_view path)           {return resource::find(path)->request_get();}
+	template<class T> [[nodiscard]] std::future<reply> request_post  (path_view path, T &&v)    {return resource::find(path)->request_post(std::move(v));}
+	template<class T> [[nodiscard]] std::future<reply> request_patch (path_view path, T &&v)    {return resource::find(path)->request_patch(std::move(v));}
+	[[nodiscard]] inline            std::future<reply> request_delete(path_view path)           {return resource::find(path)->request_delete();}
 
-	[[nodiscard]] inline            reply sync_get   (path_view path)           {return pleb::resource::root()->find(path)->sync_get();}
-	template<class T> [[nodiscard]] reply sync_post  (path_view path, T &&v)    {return pleb::resource::root()->find(path)->sync_post(std::move(v));}
-	template<class T> [[nodiscard]] reply sync_patch (path_view path, T &&v)    {return pleb::resource::root()->find(path)->sync_patch(std::move(v));}
-	[[nodiscard]] inline            reply sync_delete(path_view path)           {return pleb::resource::root()->find(path)->sync_delete();}
+	[[nodiscard]] inline            reply sync_get   (path_view path)           {return resource::find(path)->sync_get();}
+	template<class T> [[nodiscard]] reply sync_post  (path_view path, T &&v)    {return resource::find(path)->sync_post(std::move(v));}
+	template<class T> [[nodiscard]] reply sync_patch (path_view path, T &&v)    {return resource::find(path)->sync_patch(std::move(v));}
+	[[nodiscard]] inline            reply sync_delete(path_view path)           {return resource::find(path)->sync_delete();}
+
+	template<class T>                void push       (path_view path, T &&v)    {return resource::find(path)->push_post(std::move(v));}
+	template<class T>                void push_post  (path_view path, T &&v)    {return resource::find(path)->push_post(std::move(v));}
+	template<class T>                void push_patch (path_view path, T &&v)    {return resource::find(path)->push_patch(std::move(v));}
+	inline                           void push_delete(path_view path)           {return resource::find(path)->push_delete();}
 }
 
 

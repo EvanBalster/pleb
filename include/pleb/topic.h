@@ -110,8 +110,8 @@ namespace pleb
 		}
 
 		// Create a subscription to this topic and all subtopics, or a subtopic and its subtopics.
-		std::shared_ptr<subscription> subscribe_all(                    subscriber_function &&f) noexcept    {return this->emplace(shared_from_this(), std::move(f));}
-		std::shared_ptr<subscription> subscribe    (path_view subtopic, subscriber_function &&f) noexcept    {return this->subtopic(subtopic)->subscribe_all(std::move(f));}
+		std::shared_ptr<subscription> subscribe(                   subscriber_function &&f) noexcept    {return this->emplace(shared_from_this(), std::move(f));}
+		std::shared_ptr<subscription> subscribe(path_view subpath, subscriber_function &&f) noexcept    {return subtopic(subpath)->subscribe(std::move(f));}
 
 
 		// Support shared_from_this
@@ -141,30 +141,30 @@ namespace pleb
 
 		publish(
 	*/
-	inline std::shared_ptr<subscription>
+	[[nodiscard]] inline
+	std::shared_ptr<subscription>
 		subscribe(
-			std::string_view      topic,
+			path_view             topic,
 			subscriber_function &&function) noexcept
 	{
-		return pleb::topic::root()->subscribe(topic, std::move(function));
+		return pleb::topic::find(topic)->subscribe(topic, std::move(function));
 	}
 
-	template<class T>
-	inline std::shared_ptr<service>
+	template<class T> [[nodiscard]]
+	std::shared_ptr<subscription>
 		subscribe(
-			std::string_view path,
-			T               *handler_object,
-			void        (T::*handler_method)(pleb::report&))
+			path_view path,
+			T        *handler_object,
+			void (T::*handler_method)(pleb::report&))
 	{
-		return serve(path, std::bind(handler_method, handler_object, std::placeholders::_1));
+		return subscribe(path, std::bind(handler_method, handler_object, std::placeholders::_1));
 	}
 
 	template<typename T>
-	inline void
-		publish(
-			std::string_view topic,
-			T              &&item) noexcept
+	void publish(
+			path_view topic,
+			T       &&item) noexcept
 	{
-		return pleb::topic::root()->publish(topic, std::move(item));
+		return pleb::topic::find(topic)->publish(std::move(item));
 	}
 }
