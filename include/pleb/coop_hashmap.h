@@ -1,12 +1,38 @@
 #pragma once
 
 
-#include "coop_pool.h"
+#include "coop_list.h"
 
 
 
 namespace coop
 {
+	namespace unmanaged
+	{
+		template<
+			class Key,
+			class Value,
+			class Hash     = std::hash<Key>,
+			class KeyEqual = std::equal_to<Key>>
+		class hashmap :
+			protected Hash
+		{
+		public:
+			using key_type   = Key;
+			using value_type = Value;
+			using hasher     = Hash;
+			using hash_type  = size_t;
+
+			static const size_t HASH_BITS = sizeof(hash_type)*8;
+
+		protected:
+			using list_t = forward_list<T>;
+			using node_t = typename list_t::node;
+
+		protected:
+			forward_list _list;
+		};
+	}
 
 	/*
 		A concurrent wait-free atomic hashmap based on the split-ordered list technique,

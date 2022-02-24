@@ -12,11 +12,11 @@ namespace coop
 		class forward_list
 		{
 		public:
-			using value_type     = T;
-			class node;
-			using node_slot = unmanaged::slot<node>;
+			using value_type = T;
+			using slot = unmanaged::slot<T>;
 
-			using next_ptr = std::atomic<node_slot*>;
+			class node;
+			using next_ptr = std::atomic<node*>;
 
 			class iterator;
 
@@ -25,34 +25,37 @@ namespace coop
 			private:
 				friend class forward_list;
 
-				T value;
-				std::atomic<node_slot*>               next;
-				std::atomic<std::atomic<node_slot*>*> prev;
+				slot               slot;
 
 			public:
-				// Construct a tail node with no value.
-				node(std::atomic<node_slot*> &head) :
-					next(nullptr), prev(&head) {}
+				node() : _next(nullptr) {}
 
-				// Construct and insert a node with a value.
-				template<typename ... Args>
-				node(node_slot *slot, const iterator &following, Args&& ... args);
+			private:
+				std::atomic<node*> _next;
 
-				~node();
+				// Add this node to a list, making the argument point to it.
+				//   Behavior is undefined if this node is already in a list.
+				void _inject(std::atomic<node*> &nextptr)
+				{
+					node *after = nextptr.load();
+					do this->_next.store(after);
+					while (!nextptr.compare_exchange_weak(after, this));
+				}
 			};
 
 			class iterator
 			{
 			protected:
 				friend class node;
-				node_slot            *_pos;
-				std::shared_ptr<node> _node;
+				forward_list      *_list;
+				node              *_pos;
+				std::shared_ptr<T> _item;
 
 			public:
-				iterator()                                    noexcept    : _pos(nullptr) {}
-				iterator(const std::atomic<node_slot*> &head) noexcept    : _pos(nullptr) {acquire(head);}
+				iterator()                noexcept    : _list(nullptr), _pos(nullptr) {}
+				iterator(forward_list &l) noexcept    : _list(&l), _pos(nullptr) {acquire(l._head);}
 
-				iterator &operator++() noexcept    {acquire(_node->next); return *this;}
+				iterator &operator++() noexcept    {acquire(_pos->_next); return *this;}
 
 				bool operator==(const iterator &o) const noexcept    {return _pos == o._pos;}
 				bool operator!=(const iterator &o) const noexcept    {return _pos != o._pos;}
@@ -64,30 +67,42 @@ namespace coop
 			protected:
 				// Without changing _prev, set _pos and _element to the next item in the list.
 				//  This function assumes the node holding _prev is retained and will not expire.
-				bool acquire(const std::atomic<node_slot*> &next_ptr) noexcept
+				bool acquire(std::atomic<node*> &next_ptr) noexcept
 				{
+				start:
+					// Acquire the next element, unless this is the end of the list...
+					_pos = next_ptr.load(std::memory_order_acquire);
+					if (!_pos) {_item.reset(); return false;}
 					while (true)
 					{
-						// Acquire the next element, unless this is the end of the list...
-						_pos = next_ptr.load(std::memory_order_acquire);
-						if (!_pos) {_node.reset(); break;}
+						// Attempt to acquire the item at this new node.
+						if (auto new_item = _pos->slot.lock())
+						{
+							// Double check that the node has not suddenly been reallocated
+							if (next_ptr.load(std::memory_order_acquire) != _pos) goto start;
 
-						// Attempt to acquire a shared_ptr. Could fail if the node just expired.
-						//  On failure, we retry until we find a valid next node or the end of the list.
-						if (auto pos_node = _pos->lock()) {_node = std::move(pos_node); return true;}
-
-						// TODO tail node check?
+							_item = std::move(new_item);
+							return true;
+							
+						}
+						else // Remove the following, now-expired node
+						{
+							node *after = _pos->_next.load();
+							if (next_ptr.compare_exchange_weak(_pos, after))
+								_list->_free(_pos);
+						}
 					}
-					return false; // End of list
 				}
 			};
 
 		public:
-			forward_list()    : _head(&_tail) {_tail.try_emplace(_head);}
+			forward_list()    : _head(nullptr), _recycled(nullptr) {}
+
+			~forward_list()    {TODO "delete node storage"}
 
 			// Iterate over elements.
-			iterator begin()    {return iterator(_head.load(std::memory_order_acquire));}
-			iterator end  ()    {return iterator(&_tail);}
+			iterator begin()    {return iterator(*this);}
+			iterator end  ()    {return iterator();}
 
 			// Insert an element before the given iterator's position.
 			template<typename ... Args> [[nodiscard]]
@@ -114,61 +129,22 @@ namespace coop
 
 
 		protected:
-			std::atomic<node_slot*> _head;
-			node_slot               _tail;
-			pool<node>              _pool;
+			std::atomic<node*> _head, _recycled;
+
+			friend class iterator;
+			void  _free(node *node) noexcept    {node->_inject(_recycled);}
+			node* _alloc()
+			{
+				node *next = _recycled.load(), *after;
+				do after = next->_next.load();
+				while (!_recycled.compare_exchange_weak(next, after));
+				if (!next)
+				{
+					TODO "allocate node storage"
+					TODO "push new nodes onto freelist"
+				}
+				return next;
+			}
 		};
-	}
-
-
-	// Construct and insert a node with a value.
-	template<typename T> template<typename ... Args>
-	unmanaged::forward_list<T>::node::node(
-		node_slot *slot, const iterator &following, Args&& ... args)
-		:
-		value(std::forward<Args>(args...)), next(following._pos), prev(nullptr)
-	{
-		// Lock the following node by swapping its prev pointer to null.
-		std::atomic<node_slot*> *prevptr;
-		while (true)
-		{
-			prevptr = following._node->prev.load(std::memory_order_acquire);
-			if (!prevptr) continue;
-			if (prev.compare_exchange_weak(prevptr, nullptr)) break;
-		}
-
-		// Splice this very node into the "next" chain.
-		prevptr->store            (slot, std::memory_order_release);
-
-		// Build the reverse chain, re-enabling insertion & expiration
-		prev.store                (prevptr, std::memory_order_release);
-		following._node->prev.store(&next,   std::memory_order_release);
-	}
-
-	template<typename T>
-	unmanaged::forward_list<T>::node::~node()
-	{
-		// Temporarily retain the following node and lock its prevptr.
-		std::shared_ptr<node> next_node;
-		node_slot *next_slot;
-		while (true)
-		{
-			next_slot = next.load(std::memory_order_acquire);
-			if (!next_slot) break;
-			next_node = next_slot->lock();
-			if (!next_node) continue;
-
-			auto expect = &next;
-			if (next_node->prev.compare_exchange_weak(expect, nullptr)) break;
-		}
-
-		// Our prevptr should never ever be locked or otherwise null unless we were never added to a list.
-		auto prevptr = prev.load(std::memory_order_acquire);
-
-		// Route the chain of next pointers around this dying node.
-		if (prevptr) prevptr->store(next_slot);
-
-		// Give the next node our prev ptr, unlocking it for other insertions/deletions.
-		if (next_node) next_node->prev.store(prevptr);
 	}
 }

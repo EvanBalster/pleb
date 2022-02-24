@@ -1,11 +1,14 @@
 # PLEB (Process-Local Event Bus)
-PLEB is a header-only C++ library for high-performance message and event handling within a multi-threaded process.  It provides functionality comparable to message queue libraries but with essential differences that leverage the nature of communications within a single, multi-threaded process:
+PLEB is a header-only C++ library for implementing tiny multi-threaded microservices under hard real-time constraints.  It facilitates request-reply, push-pull and publish-subscribe patterns for messaging and event handling with wait-free operation.
 
-* Native objects may be exchanged rather than serialized data.
-  * These objects may have RAII functionality, reference counting, synchronization mechanisms and other side-effects.
+PLEB can be used for intra-process communications similar to a message queue framework, but with essential differences that leverage the advantages of communicating within a local process:
+
+* Events may exchange native objects, in addition to raw binary data.
+  * This can avoid unnecessary serialization and deserialization.
+  * This allows for RAII, reference counting, synchronization mechanisms and more.
 * Events are handled by calling functors.
-  * This allows for queueless or even synchronous interoperation between agents.
-  * This allows exceptions to be thrown directly or via futures when 
+  * This allows for queueless operation and instant fulfillment of certain requests.
+  * This allows exceptions to be thrown directly or via futures.
 * Event handling is completely reliable as long as the origin and destination exist.
   * In many cases, this alleviates the need for loss-tolerance or idempotence.
   * Callers may cache a reference to a named resource or topic for repeated interactions.
@@ -14,9 +17,9 @@ In this sense, PLEB can be framed as an event bus API which removes implementati
 
 
 
-## Event Processing
+## Messages = Events = Function Calls
 
-Events in PLEB are implemented by passing `std::any` objects to receivers (services or subscribers).  Receivers will typically support a limited set of parameter types, throwing an exception for unsupported types.  Receiver functions are always called synchronously, although it is common for services and subscribers to implement some kind of asynchronous function.
+Events in PLEB are implemented by passing `std::any` objects to `std::function` receivers.  Receivers will typically support a limited set of value types, treating unsupported types as an error.  Receiver functions are always called synchronously, although it is common for these to interface with some kind of asynchronous mechanism.
 
 When making a request, an exception may be thrown if the corresponding service does not exist, and no "catch-all" service is provided by a parent path.
 

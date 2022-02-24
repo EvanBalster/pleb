@@ -425,6 +425,8 @@ namespace coop
 		public:
 			using unmanaged_pool::iterator::iterator;
 
+			using value_type = pool::value_type;
+
 			value_type                   *operator->() const noexcept    {return &this->_element->value;}
 			value_type                   &operator* () const noexcept    {return  this->_element->value;}
 			std::shared_ptr<element_type> element()    const noexcept    {return  this->_element;}

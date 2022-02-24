@@ -147,7 +147,7 @@ namespace pleb
 			path_view             topic,
 			subscriber_function &&function) noexcept
 	{
-		return pleb::topic::find(topic)->subscribe(topic, std::move(function));
+		return pleb::topic::find(topic)->subscribe(std::move(function));
 	}
 
 	template<class T> [[nodiscard]]
@@ -155,7 +155,7 @@ namespace pleb
 		subscribe(
 			path_view path,
 			T        *handler_object,
-			void (T::*handler_method)(pleb::report&))
+			void (T::*handler_method)(const pleb::report&))
 	{
 		return subscribe(path, std::bind(handler_method, handler_object, std::placeholders::_1));
 	}
@@ -165,6 +165,6 @@ namespace pleb
 			path_view topic,
 			T       &&item) noexcept
 	{
-		return pleb::topic::find(topic)->publish(std::move(item));
+		return pleb::topic::nearest(topic)->publish(std::move(item));
 	}
 }
