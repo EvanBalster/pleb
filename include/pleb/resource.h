@@ -230,6 +230,15 @@ namespace pleb
 		[[nodiscard]] std::shared_ptr<service> serve(path_view subpath, service_function &&function) noexcept    {return this->subpath(subpath)->serve(std::move(function));}
 
 
+		/*
+			Alias a direct child of this resource to another existing resource.
+				The alias has the same lifetime as the original, and is
+				interchangeable with it for both requesters and new services.
+			Fails, returning false, if the child ID is already in use.
+		*/
+		bool make_alias(std::string_view child_id, resource_ptr destination)    {_trie *t=destination.get(); return this->make_link(child_id, std::shared_ptr<_trie>(std::move(destination), t));}
+
+
 		// Support shared_from_this
 		[[nodiscard]] resource_ptr                    shared_from_this()          {return resource_ptr                   (_trie::shared_from_this(), this);}
 		[[nodiscard]] std::shared_ptr<const resource> shared_from_this() const    {return std::shared_ptr<const resource>(_trie::shared_from_this(), this);}

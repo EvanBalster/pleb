@@ -84,7 +84,8 @@ namespace pleb
 		static topic_ptr root() noexcept                   {static topic_ptr root = _asTopic(_trie::create()); return root;}
 
 		// Access a topic by path.
-		static topic_ptr find(path_view path) noexcept    {return root()->subtopic(path);}
+		static topic_ptr find        (path_view path) noexcept    {return root()->subtopic(path);}
+		static topic_ptr find_nearest(path_view path) noexcept    {return root()->nearest(path);}
 
 		~topic() {}
 
@@ -92,7 +93,7 @@ namespace pleb
 		topic_ptr parent() noexcept                        {return _asTopic(_trie::parent());}
 
 		// Access a subtopic of this topic.
-		topic_ptr subtopic(path_view subtopic) noexcept    {return _asTopic(_trie::get    (subtopic));}
+		topic_ptr subtopic(path_view subtopic)             {return _asTopic(_trie::get    (subtopic));}
 		topic_ptr nearest (path_view subtopic) noexcept    {return _asTopic(_trie::nearest(subtopic));}
 
 		// Publish something all subscribers of this topic or a subtopic -- and up the chain.
@@ -110,8 +111,17 @@ namespace pleb
 		}
 
 		// Create a subscription to this topic and all subtopics, or a subtopic and its subtopics.
-		std::shared_ptr<subscription> subscribe(                   subscriber_function &&f) noexcept    {return this->emplace(shared_from_this(), std::move(f));}
-		std::shared_ptr<subscription> subscribe(path_view subpath, subscriber_function &&f) noexcept    {return subtopic(subpath)->subscribe(std::move(f));}
+		std::shared_ptr<subscription> subscribe(                   subscriber_function &&f)    {return this->emplace(shared_from_this(), std::move(f));}
+		std::shared_ptr<subscription> subscribe(path_view subpath, subscriber_function &&f)    {return subtopic(subpath)->subscribe(std::move(f));}
+
+
+		/*
+			Alias a direct child of this topic to another existing topic.
+				The alias has the same lifetime as the original, and is
+				interchangeable with it for both publishers and new subscribers.
+			Fails, returning false, if the child ID is already in use.
+		*/
+		bool make_alias(std::string_view child_id, topic_ptr destination)    {_trie *t=destination.get(); return this->make_link(child_id, std::shared_ptr<_trie>(std::move(destination), t));}
 
 
 		// Support shared_from_this
@@ -165,6 +175,6 @@ namespace pleb
 			path_view topic,
 			T       &&item) noexcept
 	{
-		return pleb::topic::nearest(topic)->publish(std::move(item));
+		return pleb::topic::find_nearest(topic)->publish(std::move(item));
 	}
 }

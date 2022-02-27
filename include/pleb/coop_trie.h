@@ -53,13 +53,21 @@ namespace coop
 		*/
 		const std::shared_ptr<trie_> &parent() noexcept    {return _parent;}
 
+
+		/*
+			Map a child of this trie to an existing trie.
+				This is comparable to a symlink, and requires the name to be unused.
+		*/
+		bool make_link(std::string_view id, std::shared_ptr<trie_> destination)    {return _children.try_insert(id, std::move(destination));}
+
+
 		/*
 			Access an immediate child by its identifier at this leve in the trie.
 				try_child may fail, returning null.
 				get_child will create a subtrie if it does not exist.
 		*/
 		[[nodiscard]] std::shared_ptr<trie_> try_child(std::string_view id) noexcept    {return _children.get(id);}
-		[[nodiscard]] std::shared_ptr<trie_> get_child(std::string_view id) noexcept    {return _children.template acquire<constructor>(id, *this);}
+		[[nodiscard]] std::shared_ptr<trie_> get_child(std::string_view id)             {return _children.template find_or_create<constructor>(id, *this);}
 		//[[nodiscard]] std::shared_ptr<trie_> operator[](std::string_view id) noexcept    {return get_child(id);}
 
 
@@ -67,8 +75,9 @@ namespace coop
 			Access direct or indirect children (or this trie node) by providing a path.
 				Path should be an iterable range of string_view compatible path elements.
 
-			acquire     -- create child nodes as needed to complete the path.
-			find_prefix -- find the trie_node corresponding to the longest matching prefix of the path.
+			find -- find a descendant if it exists.
+			get  -- create child nodes as needed to complete the path.
+			find -- find the trie_node corresponding to the longest matching prefix of the path.
 		*/
 		template<typename Path> [[nodiscard]]
 		std::shared_ptr<trie_> find   (Path path) noexcept    {return _search<Path,0>(std::forward<Path>(path));}
@@ -77,7 +86,7 @@ namespace coop
 		std::shared_ptr<trie_> nearest(Path path) noexcept    {return _search<Path,1>(std::forward<Path>(path));}
 
 		template<typename Path> [[nodiscard]]
-		std::shared_ptr<trie_> get    (Path path) noexcept
+		std::shared_ptr<trie_> get    (Path path)
 		{
 			std::shared_ptr<trie_> node = shared_from_this();
 			auto i = path.begin(), e = path.end();

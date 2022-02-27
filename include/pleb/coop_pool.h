@@ -427,8 +427,11 @@ namespace coop
 
 			using value_type = pool::value_type;
 
+			operator std::shared_ptr<value_type>() const noexcept    {return value();}
+
 			value_type                   *operator->() const noexcept    {return &this->_element->value;}
 			value_type                   &operator* () const noexcept    {return  this->_element->value;}
+			std::shared_ptr<value_type>   value()      const noexcept    {return  std::shared_ptr<value_type>(this->_element, &this->_element->value);}
 			std::shared_ptr<element_type> element()    const noexcept    {return  this->_element;}
 		};
 

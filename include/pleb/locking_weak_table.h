@@ -47,7 +47,7 @@ namespace coop
 
 		template<typename ConstructorType, typename... Args>
 		[[nodiscard]]
-		std::shared_ptr<T> acquire(std::string_view name, Args && ... args) noexcept
+		std::shared_ptr<T> find_or_create(std::string_view name, Args && ... args) noexcept
 		{
 			{
 				std::shared_lock lock(_mtx);
@@ -64,6 +64,15 @@ namespace coop
 				_map[std::string(name)] = make;
 				return make;
 			}
+		}
+
+		// Try to insert a shared_ptr.
+		bool try_insert(std::string_view name, std::shared_ptr<T> ptr)
+		{
+			std::shared_lock lock(_mtx);
+			auto &elem = _map[std::string(name)];
+			if (elem.expired()) {elem = std::move(ptr); return true;}
+			else                                        return false;
 		}
 
 

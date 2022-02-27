@@ -9,6 +9,9 @@ namespace coop
 {
 	namespace unmanaged
 	{
+
+		static const size_t LIST_SIZE = sizeof(forward_list<int>);
+
 		template<
 			class Key,
 			class Value,
@@ -23,14 +26,58 @@ namespace coop
 			using hasher     = Hash;
 			using hash_type  = size_t;
 
-			static const size_t HASH_BITS = sizeof(hash_type)*8;
+			struct entry
+			{
+				const hash_type hash;
+				const key_type  key;
+				value_type      value;
+			};
 
-		protected:
 			using list_t = forward_list<T>;
 			using node_t = typename list_t::node;
+			using bookmark_t = typename list_t::bookmark;
+			using iterator = typename list_t::iterator;
+
+			static const size_t HASH_BITS = sizeof(hash_type)*8;
+
+		public:
+			hashmap()    : _table{_table_tier0}, _tier(0) {}
+
+			iterator begin() noexcept    {return _list.begin();}
+			iterator end  () noexcept    {return _list.end();}
+
+			iterator insert(const key_type &key, value_type &&value)
+			{
+				std::atomic<bookmark_t*> _table[15];
+				std::atomic<size_t>      _tier;
+			}
+
+			iterator find(const key_type &key)
+			{
+				auto hash = Hash::operator()(key);
+				auto tier = _tier.load(std::memory_order_acquire);
+				auto *table = _table[tier].load(std::memory_order_acquire);
+				auto tableSize = _tierSize(tier);
+				
+				auto &bucket = table[hash >> _tierShift(tier)];
+				
+				for (iterator i = _list.after(bucket); i.not_end() && i->hash <= hash; ++i)
+					if (i.hash == hash && KeyEqual()(i.key, key)) return std::move(i);
+				return _list.end();
+			}
+
+		protected:
+			constexpr static size_t _tierBits (size_t tier)    {return 4+2*tier;}
+			constexpr static size_t _tierSize (size_t tier)    {return 1<<_tierBits(tier);}
+			constexpr static size_t _tierShift(size_t tier)    {return HASH_BITS-_tierBits(tier);}
 
 		protected:
 			forward_list _list;
+
+			// Table sizes 16,64,256 ... max 2^32
+			std::atomic<bookmark_t*> _table[15];
+			std::atomic<size_t>      _tier;
+			bookmark_t               _table_tier0[16];
 		};
 	}
 

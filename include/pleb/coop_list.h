@@ -4,6 +4,17 @@
 #include "coop_pool.h"
 
 
+/*
+	This header defines a cooperative wait-free forward list,
+		which may also be used as a stack.
+
+	In addition to values, lists may contain "bookmark" nodes.
+		Bookmarks may be used as starting points for iteration,
+		but will be skipped over when iterating.
+		Bookmarks CANNOT BE DELETED and must outlive the list.
+*/
+
+
 namespace coop
 {
 	namespace unmanaged
@@ -16,49 +27,75 @@ namespace coop
 			using slot = unmanaged::slot<T>;
 
 			class node;
-			using next_ptr = std::atomic<node*>;
 
 			class iterator;
 
 			class node
 			{
-			private:
-				friend class forward_list;
-
-				slot               slot;
-
 			public:
 				node() : _next(nullptr) {}
 
+				// No copying!!
+				node(const node&) = delete;
+				void operator=(const node&) = delete;
+
 			private:
+				friend class forward_list;
+				friend class iterator;
 				std::atomic<node*> _next;
 
 				// Add this node to a list, making the argument point to it.
 				//   Behavior is undefined if this node is already in a list.
-				void _inject(std::atomic<node*> &nextptr)
+				void _injectAfter(node &previous)
 				{
-					node *after = nextptr.load();
+					node *after = previous._next.load();
 					do this->_next.store(after);
-					while (!nextptr.compare_exchange_weak(after, this));
+					while (!previous._next.compare_exchange_weak(after, this));
 				}
+			};
+
+			/*
+				Bookmarks are dummy nodes skipped during iteration.
+			*/
+			class bookmark : public node
+			{
+			};
+
+			class data_node : public node
+			{
+			public:
+				slot slot;
 			};
 
 			class iterator
 			{
 			protected:
-				friend class node;
 				forward_list      *_list;
-				node              *_pos;
+				data_node         *_pos;
 				std::shared_ptr<T> _item;
 
 			public:
-				iterator()                noexcept    : _list(nullptr), _pos(nullptr) {}
-				iterator(forward_list &l) noexcept    : _list(&l), _pos(nullptr) {acquire(l._head);}
+				iterator()                            noexcept    : _list(nullptr), _pos(nullptr) {}
+				iterator(forward_list &l)             noexcept    : _list(&l), _pos(nullptr) {acquire(&l._head);}
+				iterator(forward_list &l, node &from) noexcept    : _list(&l), _pos(nullptr) {acquire(&from);}
 
-				iterator &operator++() noexcept    {acquire(_pos->_next); return *this;}
+				bool not_end() const noexcept    {return  _pos;}
+				bool is_end () const noexcept    {return !_pos;}
+
+				iterator &operator++() noexcept    {acquire(_pos); return *this;}
 
 				bool operator==(const iterator &o) const noexcept    {return _pos == o._pos;}
 				bool operator!=(const iterator &o) const noexcept    {return _pos != o._pos;}
+
+				T *operator->() const noexcept    {return  _item.get();}
+				T &operator* () const noexcept    {return *_item.get();}
+
+				operator std::shared_ptr<T>() const noexcept    {return value();}
+
+				std::shared_ptr<T> value  ()  const noexcept    {return _item;}
+
+				// Get a shared pointer to the value and set this iterator to "end of list".  Does not alter the list.
+				std::shared_ptr<T> release()        noexcept    {_pos = nullptr; return std::move(_item);}
 
 				// Insert a node before this iterator's position.
 				//void insert(node_slot *new_slot) const    {_node->insert(new_slot);}
@@ -67,19 +104,24 @@ namespace coop
 			protected:
 				// Without changing _prev, set _pos and _element to the next item in the list.
 				//  This function assumes the node holding _prev is retained and will not expire.
-				bool acquire(std::atomic<node*> &next_ptr) noexcept
+				bool acquire(node *from) noexcept
 				{
 				start:
-					// Acquire the next element, unless this is the end of the list...
-					_pos = next_ptr.load(std::memory_order_acquire);
-					if (!_pos) {_item.reset(); return false;}
+					// Acquire the next data node, unless this is the end of the list...
+					while (true)
+					{
+						node *next = from->_next.load(std::memory_order_acquire);
+						if (!next) {_pos = nullptr; _item.reset(); return false;}
+
+						if (ptrdiff_t(next) & 1)
+					}
 					while (true)
 					{
 						// Attempt to acquire the item at this new node.
 						if (auto new_item = _pos->slot.lock())
 						{
 							// Double check that the node has not suddenly been reallocated
-							if (next_ptr.load(std::memory_order_acquire) != _pos) goto start;
+							if (prev_node._next.load(std::memory_order_acquire) != _pos) goto start;
 
 							_item = std::move(new_item);
 							return true;
@@ -88,7 +130,7 @@ namespace coop
 						else // Remove the following, now-expired node
 						{
 							node *after = _pos->_next.load();
-							if (next_ptr.compare_exchange_weak(_pos, after))
+							if (prev_node._next.compare_exchange_weak(_pos, after))
 								_list->_free(_pos);
 						}
 					}
@@ -96,44 +138,64 @@ namespace coop
 			};
 
 		public:
-			forward_list()    : _head(nullptr), _recycled(nullptr) {}
+			forward_list()    : _size(0) {}
 
 			~forward_list()    {TODO "delete node storage"}
 
-			// Iterate over elements.
-			iterator begin()    {return iterator(*this);}
-			iterator end  ()    {return iterator();}
+			/*
+				Iterate over values in this list.
+			*/
+			iterator begin() noexcept    {return iterator(*this);}
+			iterator end  () noexcept    {return iterator();}
 
-			// Insert an element before the given iterator's position.
+			/*
+				Get an iterator starting just after the given node.
+			*/
+			iterator after(node &node) noexcept    {return iterator(*this, node);}
+
+			// Access the item at the front of the list.
+			std::shared_ptr<value_type> front()    {auto i = begin(); return i.release();}
+
+
+			// Insert an element after the given iterator's position.
 			template<typename ... Args> [[nodiscard]]
-			std::shared_ptr<value_type> emplace(const iterator &pos, Args&& ... args)
-			{
-				auto node_ptr = _pool.emplace(pos, std::forward<Args>(args)...);
-				return std::shared_ptr<T>(node_ptr, &node_ptr->value);
-			}
+			std::shared_ptr<value_type> emplace_after(const iterator &pos, Args&& ... args)    {if (!pos._pos) return nullptr; return _emplace(pos._pos, std::forward<Args>(args)...);}
 
 			// Insert an element at the head of the list.
 			template<typename ... Args> [[nodiscard]]
-			std::shared_ptr<value_type> emplace_front(Args&& ... args)
-			{
-				node *new_node = alloc_node();
-				auto result = node->try_emplace(std::forward<Args>(args)...);
-				while (true)
-				{
-					auto first = _head.load(std::memory_order_acquire);
-					new_node->next.store(first, std::memory_order_release);
-					if (_head.compare_exchange_weak(first, new_node)) break;
-				}
-				return result;
-			}
+			std::shared_ptr<value_type> emplace_front(Args&& ... args)    {return _emplace(_head, std::forward<Args>(args)...);}
+
+
+			// Emplace after the given node.  Be careful with this function; don't mix nodes from different lists.
+			template<typename ... Args> [[nodiscard]]
+			std::shared_ptr<value_type> emplace_after(node &node, Args&& ... args)    {return _emplace(node, std::forward<Args>(args)...);}
+
+
+			/*
+				Insert nodes manually.
+					These can be used as starting
+			*/
+			void insert_after(const iterator &pos, bookmark &node)    {node._injectAfter(*pos._pos);}
 
 
 		protected:
-			std::atomic<node*> _head, _recycled;
+			bookmark            _head, _recycled;
+			std::atomic<size_t> _size;
 
 			friend class iterator;
-			void  _free(node *node) noexcept    {node->_inject(_recycled);}
-			node* _alloc()
+
+			template<typename... Args> [[nodiscard]]
+			std::shared_ptr<value_type> _emplace(node &previous, Args&& ... args)
+			{
+				data_node *node = _alloc();
+				auto ref = node->slot.try_emplace(std::forward<Args>(args)...);
+				if (ref) node->_injectAfter(previous);
+				else     _free(node);
+				return std::move(ref);
+			}
+
+			void  _free(data_node *node) noexcept    {node->_inject(_recycled);}
+			data_node* _alloc()
 			{
 				node *next = _recycled.load(), *after;
 				do after = next->_next.load();
@@ -143,7 +205,7 @@ namespace coop
 					TODO "allocate node storage"
 					TODO "push new nodes onto freelist"
 				}
-				return next;
+				return static_cast<data_node*>(next);
 			}
 		};
 	}
