@@ -15,14 +15,11 @@ namespace coop {template<class T> class trie_;}
 */
 namespace pleb
 {
-	class topic;
-
-
 	/*
 		
 	*/
-	class topic_data :
-		public std::enable_shared_from_this<topic_data>
+	class resource_data :
+		public std::enable_shared_from_this<resource_data>
 	{
 	public:
 		using service_slot = coop::unmanaged::slot<service>;
@@ -33,7 +30,7 @@ namespace pleb
 	public:
 		// Try to emplace a service.  May fail if service already exists.
 		[[nodiscard]] std::shared_ptr<service>
-			try_emplace_service(topic_ptr &&p, service_function &&f)    {return _service.try_emplace(std::move(p), std::move(f));}
+			try_emplace_service(resource_ptr &&p, service_function &&f)    {return _service.try_emplace(std::move(p), std::move(f));}
 
 		// Access the service like a weak_ptr
 		std::shared_ptr<service> service_lock() const noexcept    {return _service.lock();}
@@ -43,7 +40,7 @@ namespace pleb
 
 		// Emplace a subscriber.
 		[[nodiscard]] std::shared_ptr<subscription>
-			emplace_subscriber(topic_ptr &&p, subscriber_function &&f)    {return _subs.emplace(std::move(p), std::move(f));}
+			emplace_subscriber(resource_ptr &&p, subscriber_function &&f)    {return _subs.emplace(std::move(p), std::move(f));}
 
 		// Iterate over subscribers.
 		subscriber_iterator begin() const    {return _subs.begin();}
@@ -53,8 +50,8 @@ namespace pleb
 	private:
 		// This class is intended for use only as a base class of topic.
 		friend class topic;
-		friend class coop::trie_<topic_data>;
-		topic_data() {}
+		friend class coop::trie_<resource_data>;
+		resource_data() {}
 
 
 	private:

@@ -5,14 +5,19 @@
 #include "conversion.h"
 #include "event.h"
 
-#include "topic_base.h"
+#include "resource_base.h"
 
 
 /*
-	A minimal system for publish/subscribe with a global hierarchy of topics.
-		Each topic may have any number of subscribers.
+	A minimal system for pub-sub and request-reply messaging patterns,
+		with native calling and native object passing.
+	
+	A resource supports:
+		One service (or none)
+		Any number of subscribers
+		Any number of child resources (organized like filesystem directories)
 
-	These classes do not provide asynchronous execution, futures or serialization;
+	These classes do not provide asynchronous execution or serialization;
 		those features can be implemented as part of the function wrapper.
 		Subscribers throwing an exception will halt processing of a report.
 
@@ -27,40 +32,48 @@ namespace pleb
 	/*
 		Topics form a global hierarchy (trie) to which 
 	*/
-	class topic :
-		protected coop::trie_<topic_data>
+	class resource :
+		protected coop::trie_<resource_data>
 	{
+	protected:
+		using _trie = coop::trie_<resource_data>;
+
+		resource(resource_ptr parent, std::string_view id)              : _trie(id, std::shared_ptr<_trie>(parent, (_trie*) &*parent)) {}
+		static resource_ptr _asTopic(std::shared_ptr<_trie> p)          {return std::shared_ptr<resource>(p, (resource*) &*p);}
+
+
 	public:
 		using subscription = pleb::subscription;
+		using service      = pleb::service;
 
 
 	public:
-		// Access the root topic.  (TODO allocate statically?)
-		static topic_ptr root() noexcept                   {static topic_ptr root = _asTopic(_trie::create("[root]")); return root;}
+		// Access the root resource.  (TODO allocate statically?)
+		static resource_ptr root() noexcept                   {static resource_ptr root = _asTopic(_trie::create("[root]")); return root;}
 
-		// Access a topic by path.
-		static topic_ptr find        (path_view path) noexcept    {return root()->subtopic(path);}
-		static topic_ptr find_nearest(path_view path) noexcept    {return root()->nearest(path);}
+		// Access a resource by its global path.
+		static resource_ptr find        (path_view path) noexcept    {return root()->subtopic(path);}
+		static resource_ptr find_nearest(path_view path) noexcept    {return root()->nearest(path);}
 
-		~topic() {}
+		~resource() {}
 
-		// Access the parent topic (root's parent is null)
-		topic_ptr parent() noexcept                        {return _asTopic(_trie::parent());}
+		// Access the parent resource (root's parent is null)
+		resource_ptr parent() noexcept                        {return _asTopic(_trie::parent());}
 
-		// Access a subtopic of this topic.
-		topic_ptr subtopic(path_view subtopic)             {return _asTopic(_trie::get    (subtopic));}
-		topic_ptr nearest (path_view subtopic) noexcept    {return _asTopic(_trie::nearest(subtopic));}
+		// Access a subtopic of this resource.
+		resource_ptr subtopic(path_view subtopic)             {return _asTopic(_trie::get    (subtopic));}
+		resource_ptr nearest (path_view subtopic) noexcept    {return _asTopic(_trie::nearest(subtopic));}
 
 
-		// Get this topic's ID or path
+		// Get this resource's ID or path
 		std::string_view id  () const noexcept    {return _trie::id();}
 		std::string      path() const noexcept    {return _trie::path();}
 
 
 		/*
-			SUBSCRIBE to a topic.
-				Subscribers receive subsequent reports to the topic
-				and the children/descendants of the topic (not counting aliases).
+			SUBSCRIBE to a resource.
+				Subscribers receive subsequent reports to the resource
+				and the children/descendants of the resource (not counting aliases).
 		*/
 		std::shared_ptr<subscription> subscribe(                   subscriber_function &&f)    {return this->emplace_subscriber(shared_from_this(), std::move(f));}
 		std::shared_ptr<subscription> subscribe(path_view subpath, subscriber_function &&f)    {return subtopic(subpath)->subscribe(std::move(f));}
@@ -68,8 +81,8 @@ namespace pleb
 
 		/*
 			PUBLISH a report.
-				This will be visible to all subscribers to a topic,
-				and the parents/ancestors of the topic.
+				This will be visible to all subscribers to a resource,
+				and the parents/ancestors of the resource.
 		*/
 		template<typename T>
 		void publish(path_view subtopic, T &&item)    {this->nearest(subtopic)->publish(std::move(item));}
@@ -79,15 +92,15 @@ namespace pleb
 		{
 			event event = {*this, 0, std::move(item)};
 
-			for (topic_ptr node = shared_from_this(); node; node = node->parent())
+			for (resource_ptr node = shared_from_this(); node; node = node->parent())
 				for (subscription &sub : (_trie::coop_type&) *node)
 					sub.func(event);
 		}
 
 
 		/*
-			SERVE this topic.
-				Subsequent requests to this topic will be passed to the function.
+			SERVE this resource.
+				Subsequent events on this resource will be passed to the function.
 				If a service already exists here, this function will fail, returning null.
 		*/
 		[[nodiscard]] std::shared_ptr<service> serve(                   service_function &&function) noexcept    {return _trie::try_emplace_service(shared_from_this(), std::move(function));}
@@ -95,7 +108,7 @@ namespace pleb
 
 
 		/*
-			REQUEST something from this topic.
+			REQUEST something from this resource.
 				A reply may be provided asynchronously by the registered service.
 				If there is no service, pleb::errors::no_such_service is thrown.
 		*/
@@ -109,7 +122,7 @@ namespace pleb
 		[[nodiscard]]                   std::future<reply> request_delete()         {return request(method::DELETE, std::any());}
 
 		/*
-			REQUEST something from this topic.
+			REQUEST something from this resource.
 				A reply will be provided synchronously by the registered service.
 				This may require the current thread to block until the reply is available.
 				If there is no service, pleb::errors::no_such_service is thrown.
@@ -123,7 +136,7 @@ namespace pleb
 		[[nodiscard]]                   reply sync_delete()         {return sync_request(method::DELETE, std::any());}
 
 		/*
-			REQUEST of this topic.
+			REQUEST of this resource.
 				The request will be routed to the registered service.
 				There is no mechanism for a direct reply (this may improve performance).
 				If there is no service, pleb::errors::no_such_service is thrown.
@@ -154,29 +167,22 @@ namespace pleb
 
 
 		/*
-			Alias a direct child of this topic to another existing topic.
+			Alias a direct child of this resource to another existing resource.
 				The alias has the same lifetime as the original, and is
 				interchangeable with it for both publishers and new subscribers.
 
-			Aliasing does not change the parent of the destination topic!
+			Aliasing does not change the parent of the destination resource!
 
 			Fails, returning false, if the child ID is already in use.
 		*/
-		bool make_alias(std::string_view child_id, topic_ptr destination)    {_trie *t=destination.get(); return this->make_link(child_id, std::shared_ptr<_trie>(std::move(destination), t));}
+		bool make_alias(std::string_view child_id, resource_ptr destination)    {_trie *t=destination.get(); return this->make_link(child_id, std::shared_ptr<_trie>(std::move(destination), t));}
 
 
 		// Support shared_from_this
-		topic_ptr                    shared_from_this()          {return topic_ptr                   (_trie::shared_from_this(), this);}
-		std::shared_ptr<const topic> shared_from_this() const    {return std::shared_ptr<const topic>(_trie::shared_from_this(), this);}
-		
-
-	protected:
-		using _trie = coop::trie_<topic_data>;
-
-		topic(std::shared_ptr<topic> parent, std::string_view id)    : _trie(id, std::shared_ptr<_trie>(parent, (_trie*) &*parent)) {}
-		static topic_ptr _asTopic(std::shared_ptr<_trie> p)          {return std::shared_ptr<topic>(p, (topic*) &*p);}
+		resource_ptr                    shared_from_this()          {return resource_ptr                (_trie::shared_from_this(), this);}
+		std::shared_ptr<const resource> shared_from_this() const    {return std::shared_ptr<const resource>(_trie::shared_from_this(), this);}
 	};
 }
 
 // Request constructor implementation
-inline void pleb::request::process()    {topic.process(*this);}
+inline void pleb::request::process()    {resource.process(*this);}

@@ -8,7 +8,7 @@
 /*
 	PLEB facilitates publishing events to topics,
 		whereupon they are handled by subscribers to those topics.
-		See topic.h for more functionality.
+		See resource.h for more functionality.
 */
 
 
@@ -17,14 +17,14 @@ namespace pleb
 	/*
 		Events are organized under a topic -- a slash-delimited string.
 	*/
-	class topic;
+	class resource;
 	class subscription;
 
 	/*
 		Topics and subscriptions are retained by shared pointers.
 			Topic pointers can be cached for repeated publishing.
 	*/
-	using topic_ptr        = std::shared_ptr<topic>;
+	using resource_ptr     = std::shared_ptr<resource>;
 	using subscription_ptr = std::shared_ptr<subscription>;
 
 	/*
@@ -33,7 +33,7 @@ namespace pleb
 	class event
 	{
 	public:
-		topic    &topic;
+		resource &resource;
 		const int status; // Conventionally set to an HTTP status code, or zero.
 		std::any  value;
 
@@ -55,11 +55,11 @@ namespace pleb
 	class subscription
 	{
 	public:
-		subscription(std::shared_ptr<topic> _topic, subscriber_function &&_func)
+		subscription(std::shared_ptr<resource> _resource, subscriber_function &&_func)
 			:
-			topic(std::move(_topic)), func(std::move(_func)) {}
+			resource(std::move(_resource)), func(std::move(_func)) {}
 
-		const std::shared_ptr<topic> topic;
-		const subscriber_function    func;
+		const std::shared_ptr<resource> resource;
+		const subscriber_function       func;
 	};
 }

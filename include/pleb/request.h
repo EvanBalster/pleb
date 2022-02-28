@@ -9,7 +9,7 @@
 /*
 	PLEB delivers requests to services, which may then reply
 		according to the method of requesting.
-		See topic.h for more functionality.
+		See resource.h for more functionality.
 */
 
 
@@ -33,15 +33,15 @@ namespace pleb
 	/*
 		Events are organized under a topic -- a slash-delimited string.
 	*/
-	class topic;
+	class resource;
 	class service;
 
 	/*
 		Resources and services are retained by shared pointers.
 			Resource pointers can be cached for repeated requests.
 	*/
-	using topic_ptr = std::shared_ptr<topic>;
-	using service_ptr = std::shared_ptr<service>;
+	using resource_ptr = std::shared_ptr<resource>;
+	using service_ptr  = std::shared_ptr<service>;
 
 	/*
 		Replies may be produced in response to a request (see below)
@@ -71,7 +71,7 @@ namespace pleb
 	class request
 	{
 	public:
-		topic       &topic;
+		resource    &resource;
 		const method method;
 		std::any     value;
 		
@@ -87,13 +87,13 @@ namespace pleb
 		*/
 		template<typename T>
 		request(
-			pleb::topic            &_topic,
+			pleb::resource          &_resource,
 			pleb::method             _method,
 			T                      &&_value,
 			std::future<pleb::reply> *reply       = nullptr,
 			bool                      process_now = true)
 			:
-			topic(_topic), method(_method), value(std::move(_value)), _reply(reply)    {if (process_now) process();}
+			resource(_resource), method(_method), value(std::move(_value)), _reply(reply)    {if (process_now) process();}
 
 		// Make a request to the given path with method and value.
 		template<typename T>
@@ -101,7 +101,7 @@ namespace pleb
 
 
 		// Process this request.  This may be done repeatedly.
-		//    This function is defined in topic.h
+		//    This function is defined in resource.h
 		void process();
 
 
@@ -145,11 +145,11 @@ namespace pleb
 	class service
 	{
 	public:
-		service(std::shared_ptr<topic> _topic, service_function &&_func)
+		service(std::shared_ptr<resource> _resource, service_function &&_func)
 			:
-			topic(std::move(_topic)), func(std::move(_func)) {}
+			resource(std::move(_resource)), func(std::move(_func)) {}
 
-		const std::shared_ptr<topic> topic;
-		const service_function       func;
+		const std::shared_ptr<resource> resource;
+		const service_function          func;
 	};
 }
