@@ -33,9 +33,9 @@ namespace pleb
 	class event
 	{
 	public:
-		resource &resource;
-		const int status; // Conventionally set to an HTTP status code, or zero.
-		std::any  value;
+		const resource_ptr resource;
+		const int          status; // Conventionally set to an HTTP status code, or zero.
+		std::any           value;
 
 	public:
 		// Access value as a specific type.

@@ -71,9 +71,9 @@ namespace pleb
 	class request
 	{
 	public:
-		resource    &resource;
-		const method method;
-		std::any     value;
+		const resource_ptr resource;
+		const method       method;
+		std::any           value;
 		
 	private:
 		using promise_t = std::promise<pleb::reply>;
@@ -81,23 +81,21 @@ namespace pleb
 		std::future<pleb::reply> *_reply;
 
 	public:
-		/*
-			Compose a request manually.
-				This function is defined in 
-		*/
+		// Compose a request manually.
 		template<typename T>
 		request(
-			pleb::resource          &_resource,
+			resource_ptr             _resource,
 			pleb::method             _method,
 			T                      &&_value,
 			std::future<pleb::reply> *reply       = nullptr,
 			bool                      process_now = true)
 			:
-			resource(_resource), method(_method), value(std::move(_value)), _reply(reply)    {if (process_now) process();}
+			resource(std::move(_resource)), method(_method), value(std::move(_value)), _reply(reply)
+				{if (process_now) process();}
 
-		// Make a request to the given topic with method and value.
+		// Make a request to the given topic with method and value.  (defined in resource.h)
 		template<typename T>
-		request(topic_view topic, pleb::method method, T &&value, std::future<reply> *reply = nullptr);
+		request(topic_view topic, pleb::method method, T &&value, std::future<reply> *reply = nullptr, bool process_now = true);
 
 
 		// Process this request.  This may be done repeatedly.

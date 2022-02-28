@@ -40,12 +40,6 @@ namespace pleb
 			void (T::*observer_method)(request&))             {return serve(path, std::bind(observer_method, observer_object, std::placeholders::_1));}
 
 
-	// Perform a manual request to the given path.
-	template<typename T> [[nodiscard]]
-		inline request::request(topic_view path, pleb::method method, T &&value, std::future<pleb::reply> *reply) :
-		request(pleb::resource::find(path), method, std::move(value), reply) {}
-
-
 	// Make a request with asynchronous reply.
 	[[nodiscard]] inline            std::future<reply> request_get   (topic_view t)           {return resource::find(t)->request_get();}
 	template<class T> [[nodiscard]] std::future<reply> request_post  (topic_view t, T &&v)    {return resource::find(t)->request_post(std::move(v));}

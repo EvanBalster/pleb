@@ -90,7 +90,7 @@ namespace pleb
 		template<typename T>
 		void publish(T &&item)
 		{
-			event event = {*this, 0, std::move(item)};
+			event event = {shared_from_this(), 0, std::move(item)};
 
 			for (resource_ptr node = shared_from_this(); node; node = node->parent())
 				for (subscription &sub : (_trie::coop_type&) *node)
@@ -113,7 +113,7 @@ namespace pleb
 				If there is no service, pleb::errors::no_such_service is thrown.
 		*/
 		template<typename T> [[nodiscard]]
-		std::future<reply> request(method method, T &&item)    {std::future<reply> r; pleb::request(*this, method, std::move(item), &r); return std::move(r);}
+		std::future<reply> request(method method, T &&item)    {std::future<reply> r; pleb::request(shared_from_this(), method, std::move(item), &r); return std::move(r);}
 
 		[[nodiscard]]                   std::future<reply> request       ()         {return request(method::GET, std::any());}
 		[[nodiscard]]                   std::future<reply> request_get   ()         {return request(method::GET, std::any());}
@@ -142,7 +142,7 @@ namespace pleb
 				If there is no service, pleb::errors::no_such_service is thrown.
 		*/
 		template<typename T>
-		void push(method method, T &&item)    {pleb::request r(*this, method, item, nullptr);}
+		void push(method method, T &&item)    {pleb::request r(shared_from_this(), method, item, nullptr);}
 
 		template<class T> void push      (T &&v)    {push(method::POST, std::move(v));}
 		template<class T> void push_post (T &&v)    {push(method::POST, std::move(v));}
@@ -184,5 +184,10 @@ namespace pleb
 	};
 }
 
-// Request constructor implementation
-inline void pleb::request::process()    {resource.process(*this);}
+// Perform a manual request to the given path.
+template<typename T>
+inline pleb::request::request(topic_view path, pleb::method method, T &&value, std::future<pleb::reply> *reply, bool process_now) :
+	request(pleb::resource::find(path), method, std::move(value), reply, process_now) {}
+
+// Process a request.
+inline void pleb::request::process()    {resource->process(*this);}
