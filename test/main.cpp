@@ -37,8 +37,8 @@ void printString(const pleb::event &event)
 {
 	auto *str = event.get<const std::string>();
 
-	if (str) std::cout << *str << std::endl;
-	else     std::cout << "printString: not a string" << std::endl;
+	if (str) std::cout << event.topic.path() << ": " << *str << std::endl;
+	else     std::cout << event.topic.path() << "printString: not a string" << std::endl;
 }
 
 

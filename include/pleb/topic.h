@@ -25,12 +25,6 @@
 namespace pleb
 {
 	/*
-		Internal data of topic.
-	*/
-
-
-
-	/*
 		Topics form a global hierarchy (trie) to which 
 	*/
 	class topic :
@@ -42,7 +36,7 @@ namespace pleb
 
 	public:
 		// Access the root topic.  (TODO allocate statically?)
-		static topic_ptr root() noexcept                   {static topic_ptr root = _asTopic(_trie::create()); return root;}
+		static topic_ptr root() noexcept                   {static topic_ptr root = _asTopic(_trie::create("[root]")); return root;}
 
 		// Access a topic by path.
 		static topic_ptr find        (path_view path) noexcept    {return root()->subtopic(path);}
@@ -56,6 +50,11 @@ namespace pleb
 		// Access a subtopic of this topic.
 		topic_ptr subtopic(path_view subtopic)             {return _asTopic(_trie::get    (subtopic));}
 		topic_ptr nearest (path_view subtopic) noexcept    {return _asTopic(_trie::nearest(subtopic));}
+
+
+		// Get this topic's ID or path
+		std::string_view id  () const noexcept    {return _trie::id();}
+		std::string      path() const noexcept    {return _trie::path();}
 
 
 		/*
@@ -150,7 +149,7 @@ namespace pleb
 				svc->func(request);
 				// TODO fill the reply if the service failed to do so
 			}
-			else throw errors::no_such_service("???");
+			else throw errors::no_such_service(path());
 		}
 
 
@@ -174,8 +173,8 @@ namespace pleb
 	protected:
 		using _trie = coop::trie_<topic_data>;
 
-		topic(std::shared_ptr<topic> parent)                   : _trie(std::shared_ptr<_trie>(parent, (_trie*) &*parent)) {}
-		static topic_ptr _asTopic(std::shared_ptr<_trie> p)    {return std::shared_ptr<topic>(p, (topic*) &*p);}
+		topic(std::shared_ptr<topic> parent, std::string_view id)    : _trie(id, std::shared_ptr<_trie>(parent, (_trie*) &*parent)) {}
+		static topic_ptr _asTopic(std::shared_ptr<_trie> p)          {return std::shared_ptr<topic>(p, (topic*) &*p);}
 	};
 }
 
