@@ -11,15 +11,15 @@
 
 namespace pleb
 {
-	template<char Delimiter> class path_view_;
-	using path_view = path_view_<'/'>;
+	template<char Delimiter> class topic_view_;
+	using topic_view = topic_view_<'/'>;
 
 	/*
-		This class facilitates iterating over the elements of a path delimited by slashes.
+		Class for iterating over a topic name with a delimiting character.
 			Leading, trailing and consecutive slashes will be ignored when iterating.
 	*/
 	template<char Delimiter>
-	class path_view_
+	class topic_view_
 	{
 	public:
 		struct end_tag {};
@@ -58,9 +58,9 @@ namespace pleb
 
 
 	public:
-		path_view_(std::string_view s)   noexcept    : string(s) {}
-		path_view_(const std::string &s) noexcept    : string(s) {}
-		path_view_(const char *cstr)     noexcept    : string(cstr) {}
+		topic_view_(std::string_view s)   noexcept    : string(s) {}
+		topic_view_(const std::string &s) noexcept    : string(s) {}
+		topic_view_(const char *cstr)     noexcept    : string(cstr) {}
 
 		iterator begin() const noexcept    {return iterator(string);}
 		iterator end  () const noexcept    {return iterator(string, end_tag {});}
@@ -75,18 +75,18 @@ namespace pleb
 
 
 	/*
-		Exception thrown when a service or other path is missing.
+		Exception thrown when a topic does not exist.
 	*/
-	class no_such_path : public std::runtime_error
+	class no_such_topic : public std::runtime_error
 	{
 	public:
-		no_such_path(std::string_view preamble, std::string_view path)
+		no_such_topic(std::string_view preamble, std::string_view topic)
 			:
-			runtime_error(std::string(preamble) + ": " + std::string(path)) {}
+			runtime_error(std::string(preamble) + ": " + std::string(topic)) {}
 
-		no_such_path(std::string_view preamble, path_view path)
+		no_such_topic(std::string_view preamble, topic_view topic)
 			:
-			no_such_path(preamble, path.string) {}
+			no_such_topic(preamble, topic.string) {}
 	};
 
 
@@ -96,9 +96,9 @@ namespace pleb
 	class incompatible_type : public std::logic_error
 	{
 	public:
-		incompatible_type(std::string_view preamble, const std::string& path)    : logic_error(preamble.data() + (": " + path)) {}
-		incompatible_type(std::string_view preamble, path_view path)             : incompatible_type(preamble, path.string) {}
-		incompatible_type(std::string_view preamble, std::string_view path)      : incompatible_type(preamble, std::string(path)) {}
-		incompatible_type(std::string_view preamble, const char* path)           : incompatible_type(preamble, std::string(path)) {}
+		incompatible_type(std::string_view preamble, const std::string& topic)    : logic_error(preamble.data() + (": " + topic)) {}
+		incompatible_type(std::string_view preamble, topic_view topic)             : incompatible_type(preamble, topic.string) {}
+		incompatible_type(std::string_view preamble, std::string_view topic)      : incompatible_type(preamble, std::string(topic)) {}
+		incompatible_type(std::string_view preamble, const char* topic)           : incompatible_type(preamble, std::string(topic)) {}
 	};
 }

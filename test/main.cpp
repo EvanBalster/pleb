@@ -37,8 +37,8 @@ void printString(const pleb::event &event)
 {
 	auto *str = event.get<const std::string>();
 
-	if (str) std::cout << event.resource.path() << ": " << *str << std::endl;
-	else     std::cout << event.resource.path() << "printString: not a string" << std::endl;
+	if (str) std::cout << event.resource.topic() << ": " << *str << std::endl;
+	else     std::cout << event.resource.topic() << "printString: not a string" << std::endl;
 }
 
 
@@ -56,7 +56,7 @@ int main(int argc, char **argv)
 	for (auto str : test_strings)
 	{
 		std::cout << "\tPath: `" << str << "':" << std::endl;
-		for (auto part : pleb::path_view(str))
+		for (auto part : pleb::topic_view(str))
 		{
 			std::cout << "\t\t* `" << part << "'" << std::endl;
 		}

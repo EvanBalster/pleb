@@ -20,10 +20,10 @@ namespace pleb
 		class no_such_service : public std::runtime_error
 		{
 		public:
-			no_such_service(const std::string& path)    : runtime_error("no such service: " + path) {}
-			no_such_service(path_view path)             : no_such_service(path.string) {}
-			no_such_service(std::string_view path)      : no_such_service(std::string(path)) {}
-			no_such_service(const char* path)           : no_such_service(std::string(path)) {}
+			no_such_service(const std::string& topic)    : runtime_error("no such service: " + topic) {}
+			no_such_service(topic_view topic)            : no_such_service(topic.string) {}
+			no_such_service(std::string_view topic)      : no_such_service(std::string(topic)) {}
+			no_such_service(const char* topic)           : no_such_service(std::string(topic)) {}
 
 		private:
 			std::string _str;
@@ -95,9 +95,9 @@ namespace pleb
 			:
 			resource(_resource), method(_method), value(std::move(_value)), _reply(reply)    {if (process_now) process();}
 
-		// Make a request to the given path with method and value.
+		// Make a request to the given topic with method and value.
 		template<typename T>
-		request(path_view path, pleb::method method, T &&value, std::future<reply> *reply = nullptr);
+		request(topic_view topic, pleb::method method, T &&value, std::future<reply> *reply = nullptr);
 
 
 		// Process this request.  This may be done repeatedly.

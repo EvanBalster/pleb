@@ -51,9 +51,9 @@ namespace pleb
 		// Access the root resource.  (TODO allocate statically?)
 		static resource_ptr root() noexcept                   {static resource_ptr root = _asTopic(_trie::create("[root]")); return root;}
 
-		// Access a resource by its global path.
-		static resource_ptr find        (path_view path) noexcept    {return root()->subtopic(path);}
-		static resource_ptr find_nearest(path_view path) noexcept    {return root()->nearest(path);}
+		// Access a resource by its global topic name.
+		static resource_ptr find        (topic_view path) noexcept    {return root()->subtopic(path);}
+		static resource_ptr find_nearest(topic_view path) noexcept    {return root()->nearest(path);}
 
 		~resource() {}
 
@@ -61,13 +61,13 @@ namespace pleb
 		resource_ptr parent() noexcept                        {return _asTopic(_trie::parent());}
 
 		// Access a subtopic of this resource.
-		resource_ptr subtopic(path_view subtopic)             {return _asTopic(_trie::get    (subtopic));}
-		resource_ptr nearest (path_view subtopic) noexcept    {return _asTopic(_trie::nearest(subtopic));}
+		resource_ptr subtopic(topic_view subtopic)             {return _asTopic(_trie::get    (subtopic));}
+		resource_ptr nearest (topic_view subtopic) noexcept    {return _asTopic(_trie::nearest(subtopic));}
 
 
-		// Get this resource's ID or path
-		std::string_view id  () const noexcept    {return _trie::id();}
-		std::string      path() const noexcept    {return _trie::path();}
+		// Get this resource's ID or full topic name.
+		std::string_view id   () const noexcept    {return _trie::id();}
+		std::string      topic() const noexcept    {return _trie::path();}
 
 
 		/*
@@ -75,8 +75,8 @@ namespace pleb
 				Subscribers receive subsequent reports to the resource
 				and the children/descendants of the resource (not counting aliases).
 		*/
-		std::shared_ptr<subscription> subscribe(                   subscriber_function &&f)    {return this->emplace_subscriber(shared_from_this(), std::move(f));}
-		std::shared_ptr<subscription> subscribe(path_view subpath, subscriber_function &&f)    {return subtopic(subpath)->subscribe(std::move(f));}
+		std::shared_ptr<subscription> subscribe(                    subscriber_function &&f)    {return this->emplace_subscriber(shared_from_this(), std::move(f));}
+		std::shared_ptr<subscription> subscribe(topic_view subpath, subscriber_function &&f)    {return subtopic(subpath)->subscribe(std::move(f));}
 
 
 		/*
@@ -85,7 +85,7 @@ namespace pleb
 				and the parents/ancestors of the resource.
 		*/
 		template<typename T>
-		void publish(path_view subtopic, T &&item)    {this->nearest(subtopic)->publish(std::move(item));}
+		void publish(topic_view subtopic, T &&item)    {this->nearest(subtopic)->publish(std::move(item));}
 
 		template<typename T>
 		void publish(T &&item)
@@ -103,8 +103,8 @@ namespace pleb
 				Subsequent events on this resource will be passed to the function.
 				If a service already exists here, this function will fail, returning null.
 		*/
-		[[nodiscard]] std::shared_ptr<service> serve(                   service_function &&function) noexcept    {return _trie::try_emplace_service(shared_from_this(), std::move(function));}
-		[[nodiscard]] std::shared_ptr<service> serve(path_view subpath, service_function &&function) noexcept    {return this->subtopic(subpath)->serve(std::move(function));}
+		[[nodiscard]] std::shared_ptr<service> serve(                    service_function &&function) noexcept    {return _trie::try_emplace_service(shared_from_this(), std::move(function));}
+		[[nodiscard]] std::shared_ptr<service> serve(topic_view subpath, service_function &&function) noexcept    {return this->subtopic(subpath)->serve(std::move(function));}
 
 
 		/*
@@ -162,7 +162,7 @@ namespace pleb
 				svc->func(request);
 				// TODO fill the reply if the service failed to do so
 			}
-			else throw errors::no_such_service(path());
+			else throw errors::no_such_service(topic());
 		}
 
 
