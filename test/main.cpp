@@ -3,9 +3,8 @@
 #include <variant>
 
 //#include <pleb/aro_pool.h>
-#include <pleb/pleb_base.h>
-#include <pleb/resource.h>
-#include <pleb/topic.h>
+#include <pleb/pleb.h>
+//#include <pleb/resource.h>
 
 #if 0
 class pool_tester;
@@ -34,9 +33,9 @@ std::atomic<int> pool_tester::count = 0;
 #endif
 
 
-void printString(const pleb::report &report)
+void printString(const pleb::event &event)
 {
-	auto *str = report.get<const std::string>();
+	auto *str = event.get<const std::string>();
 
 	if (str) std::cout << *str << std::endl;
 	else     std::cout << "printString: not a string" << std::endl;
