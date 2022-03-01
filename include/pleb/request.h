@@ -4,6 +4,8 @@
 #include <future>
 #include <exception>
 #include "pleb_base.h"
+#include "method.h"
+#include "status.h"
 
 
 /*
@@ -31,16 +33,9 @@ namespace pleb
 	}
 
 	/*
-		Events are organized under a topic -- a slash-delimited string.
+		Services are retained by a shared_ptr throughout their lifetimes.
 	*/
-	class resource;
 	class service;
-
-	/*
-		Resources and services are retained by shared pointers.
-			Resource pointers can be cached for repeated requests.
-	*/
-	using resource_ptr = std::shared_ptr<resource>;
 	using service_ptr  = std::shared_ptr<service>;
 
 	/*
@@ -49,24 +44,10 @@ namespace pleb
 	class reply
 	{
 	public:
-		int      status;
+		status   status;
 		std::any value;
 	};
 
-	/*
-		Requests are messages directed at resources (fulfilled by services).
-	*/
-	enum class method
-	{
-		GET    = 1, // Query data.  Nullipotent.
-		PATCH  = 2, // Modify existing data. Not necessarily idempotent.
-		POST   = 3, // create things, call functions. Not idempotent.
-		DELETE = 4, // Delete things.  Idempotent.
-	};
-	static const method PLEB_GET    = method::GET;
-	static const method PLEB_PATCH  = method::PATCH;
-	static const method PLEB_POST   = method::POST;
-	static const method PLEB_DELETE = method::DELETE;
 
 	class request
 	{
@@ -118,7 +99,7 @@ namespace pleb
 			Post an immediate reply.
 		*/
 		template<class T = std::any>
-		void reply(int status = 200, T &&value = {}) const
+		void reply(status status = 200, T &&value = {}) const
 		{
 			if (!_reply) return;
 			promise_t p; p.set_value(pleb::reply{status, std::move(value)});

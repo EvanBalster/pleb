@@ -24,6 +24,45 @@
 namespace coop
 {
 	/*
+		A simple wait-free one-writer many-readers manager.
+			Disallows reading during a write and vice versa.
+			This construct is not fair and prefers reader performance.
+
+		try_ operations may succeed or fail and never block.
+			If successful, they return true and must be followed by a close_ call.
+			If unsuccessful, they return false: don't call close, and try again later.
+
+		A shared lock can be retained for long periods of time to lock out writers.
+			(This may be useful to implement object recycling, for example.)
+	*/
+	struct shared_trylock
+	{
+	public:
+		shared_trylock()    : _x(0) {}
+
+		bool try_lock_shared() noexcept
+		{
+			if   (_x.fetch_add(1)>=0) {return true;}
+			else {_x.fetch_sub(1);    return false;}
+		}
+		void   unlock_shared() noexcept    {_x.fetch_sub(1);}
+
+		bool try_lock(size_t spins = 20) noexcept
+		{
+			while (true)
+			{
+				int r = 0;
+				if (_x.compare_exchange_weak(r, -0x1000000)) return true;
+				if (!(spins--)) return false;
+			}
+		}
+		void   unlock() noexcept    {_x.fetch_add(0x1000000);}
+
+	private:
+		std::atomic<int> _x;
+	};
+
+	/*
 		The 'unmanaged' namespace defines coops which do not ensure member ownership.
 			Users of the unmanaged containers must guarantee that members hold some
 			direct or indirect ownership 
@@ -43,17 +82,17 @@ namespace coop
 			using value_type = T;
 
 		public:
-			slot() : _access(0)  {}
-			~slot() {assert(empty());}
+			slot()     {}
+			~slot()    {assert(empty());}
 
 			/*
 				Access the slot like a weak_ptr.
 			*/
 			[[nodiscard]]
-			std::shared_ptr<T> lock() const noexcept    {std::shared_ptr<T> r; if (_open()) {r = _weak_t.lock();     } _close(); return r;}
-			std::weak_ptr  <T> weak() const noexcept    {std::weak_ptr  <T> r; if (_open()) {r = _weak_t;            } _close(); return r;}
-			long use_count()          const noexcept    {long r=0;             if (_open()) {r = _weak_t.use_count();} _close(); return r;}
-			bool expired()            const noexcept    {bool r=1;             if (_open()) {r = _weak_t.expired  ();} _close(); return r;}
+			std::shared_ptr<T> lock() const noexcept    {std::shared_ptr<T> r; if (_rw.try_lock_shared()) {r = _weak_t.lock();      _rw.unlock_shared();}; return r;}
+			std::weak_ptr  <T> weak() const noexcept    {std::weak_ptr  <T> r; if (_rw.try_lock_shared()) {r = _weak_t;             _rw.unlock_shared();} return r;}
+			long use_count()          const noexcept    {long r=0;             if (_rw.try_lock_shared()) {r = _weak_t.use_count(); _rw.unlock_shared();} return r;}
+			bool expired()            const noexcept    {bool r=1;             if (_rw.try_lock_shared()) {r = _weak_t.expired  (); _rw.unlock_shared();} return r;}
 			bool empty()              const noexcept    {return expired();}
 
 			/*
@@ -67,11 +106,11 @@ namespace coop
 				//   The initial check for !expired is a double-checking optimization.
 				std::shared_ptr<T> new_t = nullptr;
 				if (empty())
-					if (_write_begin())
+					if (_rw.try_lock())
 				{
 					if (_weak_t.expired())
 						_weak_t = new_t = std::shared_ptr<T>(new (_buf) T(std::forward<Args>(args) ...), deleter{});
-					_write_finish();
+					_rw.unlock();
 				}
 				return new_t;
 			}
@@ -79,16 +118,10 @@ namespace coop
 		private:
 			struct deleter {void operator()(T *t) const noexcept    {t->~T();}};
 
-			bool _open () const noexcept    {return _access.fetch_add(1)>=0;}
-			void _close() const noexcept    {       _access.fetch_sub(1);}
-
-			bool _write_begin(size_t spins = 20) const noexcept    {do {int r = 0; if (_access.compare_exchange_strong(r, -0x10000)) return true;} while (spins--); return false;}
-			void _write_finish()                 const noexcept    {_access.fetch_add(0x10000);}
-
 			// TODO need a lock-free atomic weak pointer
 			alignas(T) char          _buf[sizeof(T)];
 			std::weak_ptr<T>         _weak_t;   // TODO half the weak pointer is wasted memory because it's pointing to _buf.
-			mutable std::atomic<int> _access;
+			mutable shared_trylock   _rw;
 		};
 
 		/*

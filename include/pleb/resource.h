@@ -80,22 +80,26 @@ namespace pleb
 
 
 		/*
-			PUBLISH a report.
+			PUBLISH an event.
 				This will be visible to all subscribers to a resource,
 				and the parents/ancestors of the resource.
 		*/
 		template<typename T>
-		void publish(topic_view subtopic, T &&item)    {this->nearest(subtopic)->publish(std::move(item));}
+		void publish(topic_view subtopic, T &&item, status status = statuses::OK)    {this->nearest(subtopic)->publish(std::move(item), status);}
+		void publish(topic_view subtopic,           status status)                      {this->nearest(subtopic)->publish(std::any(), status);}
 
 		template<typename T>
-		void publish(T &&item)
+		void publish(T &&item, status status = statuses::OK)
 		{
-			event event = {shared_from_this(), 0, std::move(item)};
+			event event = {shared_from_this(), status, std::move(item)};
 
 			for (resource_ptr node = shared_from_this(); node; node = node->parent())
 				for (subscription &sub : (_trie::coop_type&) *node)
 					sub.func(event);
 		}
+
+		// Publish a status with no value.
+		void publish(status status)    {this->publish(std::any(), status);}
 
 
 		/*
@@ -117,6 +121,7 @@ namespace pleb
 
 		[[nodiscard]]                   std::future<reply> request       ()         {return request(method::GET, std::any());}
 		[[nodiscard]]                   std::future<reply> request_get   ()         {return request(method::GET, std::any());}
+		template<class T> [[nodiscard]] std::future<reply> request_put   (T &&v)    {return request(method::PUT, std::move(item));}
 		template<class T> [[nodiscard]] std::future<reply> request_post  (T &&v)    {return request(method::POST, std::move(item));}
 		template<class T> [[nodiscard]] std::future<reply> request_patch (T &&v)    {return request(method::PATCH, std::move(item));}
 		[[nodiscard]]                   std::future<reply> request_delete()         {return request(method::DELETE, std::any());}
@@ -131,12 +136,13 @@ namespace pleb
 		reply sync_request(method method, T &&item)    {return request(method, std::move(item)).get();}
 
 		[[nodiscard]]                   reply sync_get   ()         {return sync_request(method::GET, std::any());}
+		template<class T> [[nodiscard]] reply sync_put   (T &&v)    {return sync_request(method::PUT, std::move(item));}
 		template<class T> [[nodiscard]] reply sync_post  (T &&v)    {return sync_request(method::POST, std::move(item));}
 		template<class T> [[nodiscard]] reply sync_patch (T &&v)    {return sync_request(method::PATCH, std::move(item));}
 		[[nodiscard]]                   reply sync_delete()         {return sync_request(method::DELETE, std::any());}
 
 		/*
-			REQUEST of this resource.
+			PUSH data or commands to a resource.
 				The request will be routed to the registered service.
 				There is no mechanism for a direct reply (this may improve performance).
 				If there is no service, pleb::errors::no_such_service is thrown.
@@ -144,10 +150,11 @@ namespace pleb
 		template<typename T>
 		void push(method method, T &&item)    {pleb::request r(shared_from_this(), method, item, nullptr);}
 
-		template<class T> void push      (T &&v)    {push(method::POST, std::move(v));}
-		template<class T> void push_post (T &&v)    {push(method::POST, std::move(v));}
-		template<class T> void push_patch(T &&v)    {push(method::PATCH, std::move(v));}
-		void                   push_delete()        {push(method::DELETE, std::any());}
+		template<class T> void push/*PUT*/(T &&v)    {push(method::PUT, std::move(v));}
+		template<class T> void push_put   (T &&v)    {push(method::PUT, std::move(v));}
+		template<class T> void push_post  (T &&v)    {push(method::POST, std::move(v));}
+		template<class T> void push_patch (T &&v)    {push(method::PATCH, std::move(v));}
+		void                   push_delete()         {push(method::DELETE, std::any());}
 
 
 		/*
@@ -183,6 +190,11 @@ namespace pleb
 		std::shared_ptr<const resource> shared_from_this() const    {return std::shared_ptr<const resource>(_trie::shared_from_this(), this);}
 	};
 }
+
+inline pleb::resource_ptr pleb::operator/(const resource_ptr &ptr, topic_view subtopic)    {return ptr->subtopic(subtopic);}
+
+inline pleb::resource_ptr pleb::find_nearest_resource(pleb::topic_view topic)    {return pleb::resource::find_nearest(topic);}
+inline pleb::resource_ptr pleb::find_resource        (pleb::topic_view topic)    {return pleb::resource::find(topic);}
 
 // Perform a manual request to the given path.
 template<typename T>

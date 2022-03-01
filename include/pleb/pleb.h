@@ -9,52 +9,61 @@ namespace pleb
 	// Subscribe to a topic, providing a handler function.
 	[[nodiscard]] inline std::shared_ptr<subscription>
 		subscribe(
-			topic_view             topic,
-			subscriber_function &&function) noexcept          {return pleb::resource::find(topic)->subscribe(std::move(function));}
+			target_resource       resource,
+			subscriber_function &&function) noexcept                   {return resource->subscribe(std::move(function));}
 
 	// Subscribe to a topic, providing a handler object and method.
 	template<class T> [[nodiscard]] std::shared_ptr<subscription>
 		subscribe(
-			topic_view path,
-			T        *handler_object,
-			void (T::*handler_method)(const pleb::event&))    {return subscribe(path, std::bind(handler_method, handler_object, std::placeholders::_1));}
+			target_resource resource,
+			T              *handler_object,
+			void       (T::*handler_method)(const pleb::event&))       {return subscribe(std::move(resource), std::bind(handler_method, handler_object, std::placeholders::_1));}
 
 
 	// Publish a value to a topic.
 	template<typename T>
 	void publish(
-			topic_view topic,
-			T       &&item) noexcept                          {return pleb::resource::find_nearest(topic)->publish(std::move(item));}
+			target_nearest_resource resource,
+			T                     &&item,
+			status                  status = statuses::OK) noexcept    {return resource->publish(std::move(item), status);}
 
+	// Publish only a status to a topic.
+	inline void publish(
+		target_nearest_resource resource,
+		status                  status) noexcept                       {return resource->publish(status);}
+	
 
 	// Serve a resource.
 	[[nodiscard]] inline std::shared_ptr<service>
 		serve(
-			topic_view          path,
-			service_function &&function) noexcept             {return pleb::resource::find(path)->serve(std::move(function));}
+			target_resource    resource,
+			service_function &&function) noexcept                      {return resource->serve(std::move(function));}
 
 	template<class T> [[nodiscard]] std::shared_ptr<service>
 		serve(
-			topic_view path,
-			T        *observer_object,
-			void (T::*observer_method)(request&))             {return serve(path, std::bind(observer_method, observer_object, std::placeholders::_1));}
+			target_resource resource,
+			T              *service_object,
+			void       (T::*service_method)(request&))                 {return serve(std::move(resource), std::bind(service_method, service_object, std::placeholders::_1));}
 
 
 	// Make a request with asynchronous reply.
-	[[nodiscard]] inline            std::future<reply> request_get   (topic_view t)           {return resource::find(t)->request_get();}
-	template<class T> [[nodiscard]] std::future<reply> request_post  (topic_view t, T &&v)    {return resource::find(t)->request_post(std::move(v));}
-	template<class T> [[nodiscard]] std::future<reply> request_patch (topic_view t, T &&v)    {return resource::find(t)->request_patch(std::move(v));}
-	[[nodiscard]] inline            std::future<reply> request_delete(topic_view t)           {return resource::find(t)->request_delete();}
+	[[nodiscard]] inline            std::future<reply> request_get   (target_resource t)           {return t->request_get();}
+	template<class T> [[nodiscard]] std::future<reply> request_put   (target_resource t, T &&v)    {return t->request_put(std::move(v));}
+	template<class T> [[nodiscard]] std::future<reply> request_post  (target_resource t, T &&v)    {return t->request_post(std::move(v));}
+	template<class T> [[nodiscard]] std::future<reply> request_patch (target_resource t, T &&v)    {return t->request_patch(std::move(v));}
+	[[nodiscard]] inline            std::future<reply> request_delete(target_resource t)           {return t->request_delete();}
 
 	// Make a request with synchronous reply.
-	[[nodiscard]] inline                         reply sync_get   (topic_view t)           {return resource::find(t)->sync_get();}
-	template<class T> [[nodiscard]]              reply sync_post  (topic_view t, T &&v)    {return resource::find(t)->sync_post(std::move(v));}
-	template<class T> [[nodiscard]]              reply sync_patch (topic_view t, T &&v)    {return resource::find(t)->sync_patch(std::move(v));}
-	[[nodiscard]] inline                         reply sync_delete(topic_view t)           {return resource::find(t)->sync_delete();}
+	[[nodiscard]] inline                         reply sync_get   (target_resource t)           {return t->sync_get();}
+	template<class T> [[nodiscard]]              reply sync_put   (target_resource t, T &&v)    {return t->sync_put(std::move(v));}
+	template<class T> [[nodiscard]]              reply sync_post  (target_resource t, T &&v)    {return t->sync_post(std::move(v));}
+	template<class T> [[nodiscard]]              reply sync_patch (target_resource t, T &&v)    {return t->sync_patch(std::move(v));}
+	[[nodiscard]] inline                         reply sync_delete(target_resource t)           {return t->sync_delete();}
 
 	// Make a request, declining any reply.  (this is a bit more lightweight.)
-	template<class T>                             void push       (topic_view t, T &&v)    {return resource::find(t)->push_post(std::move(v));}
-	template<class T>                             void push_post  (topic_view t, T &&v)    {return resource::find(t)->push_post(std::move(v));}
-	template<class T>                             void push_patch (topic_view t, T &&v)    {return resource::find(t)->push_patch(std::move(v));}
-	inline                                        void push_delete(topic_view t)           {return resource::find(t)->push_delete();}
+	template<class T>                             void push/*PUT*/(target_resource t, T &&v)    {return t->push     (std::move(v));}
+	template<class T>                             void push_put   (target_resource t, T &&v)    {return t->push_put(std::move(v));}
+	template<class T>                             void push_post  (target_resource t, T &&v)    {return t->push_post(std::move(v));}
+	template<class T>                             void push_patch (target_resource t, T &&v)    {return t->push_patch(std::move(v));}
+	inline                                        void push_delete(target_resource t)           {return t->push_delete();}
 }

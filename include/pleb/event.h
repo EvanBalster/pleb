@@ -3,6 +3,7 @@
 
 #include "pleb_base.h"
 #include "conversion.h"
+#include "status.h"
 
 
 /*
@@ -15,16 +16,9 @@
 namespace pleb
 {
 	/*
-		Events are organized under a topic -- a slash-delimited string.
+		Subscriptions are retained by a shared_ptr throughout their lifetimes.
 	*/
-	class resource;
 	class subscription;
-
-	/*
-		Topics and subscriptions are retained by shared pointers.
-			Topic pointers can be cached for repeated publishing.
-	*/
-	using resource_ptr     = std::shared_ptr<resource>;
 	using subscription_ptr = std::shared_ptr<subscription>;
 
 	/*
@@ -34,7 +28,7 @@ namespace pleb
 	{
 	public:
 		const resource_ptr resource;
-		const int          status; // Conventionally set to an HTTP status code, or zero.
+		const pleb::status status; // Conventionally set to an HTTP status code, or zero.
 		std::any           value;
 
 	public:

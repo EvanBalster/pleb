@@ -1,5 +1,16 @@
 # PLEB (Process-Local Event Bus)
-PLEB is a header-only C++ library for implementing tiny multi-threaded microservices under hard real-time constraints.  It facilitates request-reply, push-pull and publish-subscribe patterns for messaging and event handling with wait-free operation.
+PLEB is a header-only C++ library for implementing tiny multi-threaded microservices under hard real-time constraints.  Its basic features include:
+
+* Multiple communication patterns
+  * Request-reply
+  * Push-pull
+  * Publish-subscribe
+  * Surveyor-respondent*
+* On-demand type conversion (planned)
+
+
+
+## A Native Event Bus
 
 PLEB can be used for intra-process communications similar to a message queue framework, but with essential differences that leverage the advantages of communicating within a local process:
 
@@ -17,11 +28,15 @@ In this sense, PLEB can be framed as an event bus API which removes implementati
 
 
 
-## Messages = Events = Function Calls
+## Requests, Events and other Patterns
 
-Events in PLEB are implemented by passing `std::any` objects to `std::function` receivers.  Receivers will typically support a limited set of value types, treating unsupported types as an error.  Receiver functions are always called synchronously, although it is common for these to interface with some kind of asynchronous mechanism.
+PLEB facilitates two primary messaging patterns:  a `request` to a single service or an `event` for any number of subscribers.  Values passed to receivers are wrapped in `std::any`.  Receivers will typically support a limited set of value types, treating unsupported types as an error.
 
-When making a request, an exception may be thrown if the corresponding service does not exist, and no "catch-all" service is provided by a parent path.
+Requests and event handlers are realized by direct calls to bound`std::function` wrappers.  PLEB itself provides no intrinsic thread safety in passing events and requests; instead, it is expected that these mechanisms will be built into the registered functions themselves.  Replies to requests may be fulfilled using `std::future`, which is thread-safe.
+
+
+
+A surveyor-respondent pattern may be implemented by publishing an object capable of collecting responses.
 
 
 
@@ -37,7 +52,11 @@ Publish/subscribe is synchronous; any thread safety must be managed by the publi
 
 ## Request-Reply Pattern
 
-It is desirable to implement REST operations with PLEB's request mechanism
+Requests in PLEB utilize HTTP methods:
+
+* **GET** retrieves data without modifying it.
+
+
 
 Replies to requests may be implemented by replacing the request object in the supplied parameter.
 
@@ -49,6 +68,8 @@ We recommend the following conventions for implementing CRUD methods:
 * **READ** data by making a request with an empty `std::any` object.
 * **UPDATE** data by making a request to the object with a new value or patch data.
 * **DELETE** data by making a request to the object with a tag type.
+
+The push-pull messaging pattern is a specialization of the request pattern where no `std::future` is provided and thus no reply is possible.  This typically yields a performance advantage, and may affect the choice of protocol used to fulfill networked requests.
 
 
 

@@ -11,6 +11,16 @@
 
 namespace pleb
 {
+	/*
+		Resources are used to route all communications through PLEB.
+			Pointers to resources may be stored to keep them alive and
+			avoid the overhead of looking them up every time.
+	*/
+	class resource;
+	using resource_ptr = std::shared_ptr<resource>;
+
+
+
 	template<char Delimiter> class topic_view_;
 	using topic_view = topic_view_<'/'>;
 
@@ -75,6 +85,60 @@ namespace pleb
 
 
 	/*
+		These methods are defined in resource.h
+	*/
+	inline resource_ptr find_nearest_resource(topic_view topic);
+	inline resource_ptr find_resource        (topic_view topic);
+
+	inline resource_ptr operator/(const resource_ptr &ptr, topic_view subtopic);
+
+
+
+	/*
+		"resource identity" designed for use in functions referring to a resource.
+			Accepts string arguments or resource pointers.
+	*/
+	class target_resource
+	{
+	public:
+		resource_ptr resource;
+
+		target_resource(resource_ptr _resource)      : resource(std::move(_resource)) {}
+
+		target_resource(topic_view         topic)    : resource(find_resource(topic)) {}
+		target_resource(const std::string& topic)    : resource(find_resource(topic)) {}
+		target_resource(std::string_view   topic)    : resource(find_resource(topic)) {}
+		target_resource(const char*        topic)    : resource(find_resource(topic)) {}
+
+		// Access the resource
+		pleb::resource *operator->() const noexcept    {return  resource.get();}
+		pleb::resource &operator* () const noexcept    {return *resource.get();}
+		operator resource_ptr()      const noexcept    {return  resource;}
+		resource_ptr release()             noexcept    {return std::move(resource);}
+	};
+
+	class target_nearest_resource
+	{
+	public:
+		resource_ptr resource;
+
+		target_nearest_resource(resource_ptr _resource)      : resource(std::move(_resource)) {}
+
+		target_nearest_resource(topic_view         topic)    : resource(find_nearest_resource(topic)) {}
+		target_nearest_resource(const std::string& topic)    : resource(find_nearest_resource(topic)) {}
+		target_nearest_resource(std::string_view   topic)    : resource(find_nearest_resource(topic)) {}
+		target_nearest_resource(const char*        topic)    : resource(find_nearest_resource(topic)) {}
+
+		// Access the resource
+		pleb::resource *operator->() const noexcept    {return  resource.get();}
+		pleb::resource &operator* () const noexcept    {return *resource.get();}
+		operator resource_ptr()      const noexcept    {return  resource;}
+		resource_ptr release()             noexcept    {return std::move(resource);}
+	};
+
+
+
+	/*
 		Exception thrown when a topic does not exist.
 	*/
 	class no_such_topic : public std::runtime_error
@@ -97,7 +161,7 @@ namespace pleb
 	{
 	public:
 		incompatible_type(std::string_view preamble, const std::string& topic)    : logic_error(preamble.data() + (": " + topic)) {}
-		incompatible_type(std::string_view preamble, topic_view topic)             : incompatible_type(preamble, topic.string) {}
+		incompatible_type(std::string_view preamble, topic_view topic)            : incompatible_type(preamble, topic.string) {}
 		incompatible_type(std::string_view preamble, std::string_view topic)      : incompatible_type(preamble, std::string(topic)) {}
 		incompatible_type(std::string_view preamble, const char* topic)           : incompatible_type(preamble, std::string(topic)) {}
 	};

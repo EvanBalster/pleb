@@ -59,6 +59,9 @@ namespace coop
 			*/
 			class bookmark : public node
 			{
+			protected:
+				friend class iterator;
+				mutable read_write_gate _rw;
 			};
 
 			class data_node : public node

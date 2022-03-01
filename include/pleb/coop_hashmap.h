@@ -56,7 +56,7 @@ namespace coop
 			{
 				auto hash = Hash::operator()(key);
 				auto tier = _tier.load(std::memory_order_acquire);
-				auto *table = _table[tier].load(std::memory_order_acquire);
+				auto *table = _table[tier].load(); // Synchronization?
 				auto tableSize = _tierSize(tier);
 				
 				auto &bucket = table[hash >> _tierShift(tier)];
