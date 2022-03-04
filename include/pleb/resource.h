@@ -180,9 +180,15 @@ namespace pleb
 
 			Aliasing does not change the parent of the destination resource!
 
+			The alias is broken if the pointer to destination is allowed to expire.
+
 			Fails, returning false, if the child ID is already in use.
 		*/
-		bool make_alias(std::string_view child_id, resource_ptr destination)    {_trie *t=destination.get(); return this->make_link(child_id, std::shared_ptr<_trie>(std::move(destination), t));}
+		resource_ptr make_alias(std::string_view child_id, target_resource destination)
+		{
+			if (destination.resource && this->make_link(child_id, std::shared_ptr<_trie>(destination.resource, (_trie*) destination.resource.get())))
+				return std::move(destination.resource);
+		}
 
 
 		// Support shared_from_this
