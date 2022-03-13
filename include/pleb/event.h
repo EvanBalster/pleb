@@ -32,12 +32,19 @@ namespace pleb
 		std::any           value;
 
 	public:
-		// Access value as a specific type.
-		template<typename T> const T *cast() const noexcept    {return std::any_cast<T>(&value);}
-		template<typename T> T       *cast()       noexcept    {return std::any_cast<T>(&value);}
+		// Access value as a specific type.  Only succeeds if the type is an exact match.
+		template<class T> const T *value_cast() const noexcept    {return std::any_cast<T>(&value);}
+		template<class T> T       *value_cast()       noexcept    {return std::any_cast<T>(&value);}
 
-		// Access value, allowing it to be supplied by value or shared_ptr.
-		template<typename T> const T *get() const noexcept    {return pleb::any_const_ptr<T>(value);}
+		// Get a constant pointer to the value.
+		//  This method automatically deals with indirect values.
+		template<class T> const T *get() const noexcept    {return pleb::any_const_ptr<T>(value);}
+
+		// Access a mutable pointer to the value.
+		//  This method automatically deals with indirect values.
+		//  This will fail when a const event holds a value directly.
+		template<class T> T       *get_mutable() const noexcept    {return pleb::any_ptr<T>(value);}
+		template<class T> T       *get_mutable()       noexcept    {return pleb::any_ptr<T>(value);}
 	};
 
 	using subscriber_function = std::function<void(const event&)>;

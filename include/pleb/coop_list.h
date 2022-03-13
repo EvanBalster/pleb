@@ -28,17 +28,16 @@ namespace coop
 			using slot = unmanaged::slot<T>;
 
 			class node;
-			class data_node;
+			class value_node;
 			class bookmark_node;
 
 			class iterator;
 
 			static const uintptr_t
 				node_data_flag    = 1,
-				node_release_flag = 2, // Flag bookmarks for removal
-				sentinel_end_of_list = 0,
-				sentinel_out_of_list = 1,
-				node_ptr_mask = ~(node_data_flag & node_release_flag);
+				sentinel_out_of_list = 0,
+				sentinel_end_of_list = 1,
+				node_ptr_mask = ~(node_data_flag);
 
 			// A tagged pointer indicating the next node and its type (data or bookmark)
 			//    Also contains a flag for whether the HOLDER of this pointer was released.
@@ -46,10 +45,10 @@ namespace coop
 			{
 				uintptr_t raw;
 
-				bool is_data()     const noexcept    {return raw&node_data_flag;}
-				bool prev_expire() const noexcept    {return raw&node_release_flag;}
-
-				bool is_excised() const noexcept    {return raw == sentinel_out_of_list;}
+				bool is_null()    const noexcept    {return !(raw&node_ptr_mask);}
+				bool is_node()    const noexcept    {return  (raw&node_ptr_mask);}
+				bool is_data()    const noexcept    {return raw&node_data_flag;}
+				bool is_in_list() const noexcept    {return raw != sentinel_out_of_list;}
 
 				explicit operator bool() const noexcept    {return bool(raw&node_ptr_mask);}
 
@@ -61,10 +60,10 @@ namespace coop
 			{
 				std::atomic<uintptr_t> raw;
 
-				atomic_node_ptr() : raw(sentinel_end_of_list) {}
+				atomic_node_ptr() : raw(sentinel_out_of_list) {}
 
-				void set_prev_expire(std::memory_order order = std::memory_order_seq_cst) noexcept    {raw.fetch_or(node_release_flag);}
-				void set_prev_excised() noexcept                                                      {raw.store(sentinel_out_of_list);}
+				void set_end_of_list() noexcept    {raw.store(sentinel_end_of_list, std::memory_order_relaxed);}
+				void set_out_of_list() noexcept    {raw.store(sentinel_out_of_list, std::memory_order_relaxed);}
 
 				node_ptr load(               std::memory_order order = std::memory_order_seq_cst) const    {return {raw.load(order)};}
 				void store(const node_ptr v, std::memory_order order = std::memory_order_seq_cst)          {raw.store(v.raw,order);}
@@ -76,6 +75,8 @@ namespace coop
 			{
 			public:
 				node() {}
+				
+				// Check if this node is in a list.
 
 				// No copying!!
 				node(const node&) = delete;
@@ -97,26 +98,37 @@ namespace coop
 					while (!_next.compare_exchange_weak(after, new_next));
 				}
 			};
+			
+			/*
+				A slim node used as the beginning of a list.
+			*/
+			class start_node : public node
+			{
+			public:
+				start_node()    {_next.set_end_of_list();}
+			};
 
 			/*
-				Bookmarks are dummy nodes skipped during iteration.
+				Bookmarks are dummy nodes skipped by regular iterators.
+					They are typically inserted in order to act as
+					shortcuts to segments of the list (eg, in hashmaps).
 			*/
 			class bookmark_node : public node
 			{
 			public:
 				node_ptr node_ptr() const noexcept    {return {uintptr_t(this)};}
 
-				void mark_for_removal()    {_next.set_prev_expire();}
+				void mark_for_removal()    {_readers.close();}
 
 			protected:
-				friend class iterator;
-				mutable shared_trylock _rw;
+				friend class node_iterator;
+				mutable visitor_guard _readers;
 			};
 
 			/*
 				Data nodes contain... data
 			*/
-			class data_node : public node
+			class value_node : public node
 			{
 			public:
 				node_ptr node_ptr() const noexcept    {return {uintptr_t(this)&node_data_flag};}
@@ -130,6 +142,7 @@ namespace coop
 			class node_iterator
 			{
 			protected:
+				friend class forward_list;
 				forward_list      *_list;
 				node              *_pos;
 				std::shared_ptr<T> _item;
@@ -139,6 +152,7 @@ namespace coop
 				node_iterator(forward_list &l)             noexcept    : _list(&l), _pos(0) {_follow(l._head);}
 				node_iterator(forward_list &l, node &from) noexcept    : _list(&l), _pos(0) {_follow(from);}
 
+				bool is_data() const noexcept    {return bool(_item);}
 				bool not_end() const noexcept    {return  _pos;}
 				bool is_end () const noexcept    {return !_pos;}
 
@@ -147,64 +161,73 @@ namespace coop
 				bool operator==(const iterator &o) const noexcept    {return _pos == o._pos;}
 				bool operator!=(const iterator &o) const noexcept    {return _pos != o._pos;}
 
+				// Access the value (data nodes only)
 				T *operator->() const noexcept    {return  _item.get();}
 				T &operator* () const noexcept    {return *_item.get();}
 
 				operator std::shared_ptr<T>() const noexcept    {return value();}
 
-				std::shared_ptr<T> value  ()  const noexcept    {return _item;}
+				const std::shared_ptr<T> &value() const noexcept    {return _item;}
 
 				// Get a shared pointer to the value and set this iterator to "end of list".  Does not alter the list.
-				std::shared_ptr<T> release()        noexcept    {_pos = nullptr; return std::move(_item);}
+				std::shared_ptr<T> release() noexcept    {_pos = nullptr; return std::move(_item);}
 
 				// Insert a node before this iterator's position.
 				//void insert(node_slot *new_slot) const    {_node->insert(new_slot);}
 
 			
 			protected:
+				void _moveTo(node *pos, std::shared_ptr<T> item = {}) noexcept
+				{
+					if (_pos && !_item)
+						static_cast<bookmark_node*>(_pos)->_readers.leave();
+					_pos = pos;
+					_item = std::move(item);
+				}
+			
 				// Move to the first un-expired element in the list after "from".
 				//  This function assumes the node holding _prev is retained and will not expire.
-				bool _follow(node &from) noexcept
+				void _follow(node &from) noexcept
 				{
-					node_ptr pos;
+					node_ptr next;
 
 				reload:
-					pos = from._next.load(std::memory_order_acquire);
+					next = from._next.load(std::memory_order_acquire);
 					
 					while (true)
 					{
-						_pos = pos.get();
-						if (pos.is_data())
+						node *node = next.get();
+						if (!node) return _moveTo(nullptr);
+						
+						if (next.is_data())
 						{
 							// Attempt to acquire the item at this new node.
-							auto node = static_cast<data_node*>(_pos);
-							if (auto data_ptr = node->slot.lock())
+							auto v_node = static_cast<value_node*>(node);
+							if (auto value_ref = v_node->slot.lock())
 							{
-								// Double check that the node has not suddenly been reallocated
+								// Double check that the node was not recycled before being locked
 								if (from._next.load(std::memory_order_acquire) != _pos) goto reload;
-
-								_item = std::move(data_ptr);
-								return true;
-
+								return _moveTo(v_node, std::move(value_ref));
 							}
 						}
 						else
 						{
-							auto node = static_cast<bookmark_node*>(_pos);
-							auto status = node->_next.load(std::memory_order_acquire); // relaxed?
-							if (status.prev_expire())
-							{
-								// This node is marked for removal; attempt to excise it...
-								if (!)
-							}
+							// Attempt to acquire the bookmark, or excise it if expired.
+							//   DEFECT: this operation may spinlock if another thread has locked the node.
+							//   REMEDY: attempt to skip over locked node.
+							auto m_node = static_cast<bookmark_node*>(node);
+							if      (m_node->_readers.join())      _moveTo(m_node);
+							else if (!m_node->_readers.try_lock()) goto reload;
 						}
 
-						// The next node is expired.  Remove it.
-						node_ptr after = _pos->_next.load();
-						if (start._next.compare_exchange_weak(pos, after))
+						// The next node seems to have expired.  Remove it.
+					excise_node:
+						node_ptr after = node->_next.load();
+						if (from._next.compare_exchange_weak(next, after))
 						{
-							// Excised this node; clean up.
-							if (pos.is_data()) _list->_free(_pos);
+							node->_next.set_out_of_list();
+							if (next.is_data()) _list->_free(static_cast<value_node*>(node));
+							else                static_cast<bookmark_node*>(node)->_readers.unlock();
 						}
 					}
 				}
@@ -223,7 +246,7 @@ namespace coop
 				iterator &operator++() noexcept    {node_iterator::operator++(); _skip_non_data(); return *this;}
 
 			protected:
-				void _skip_non_data() noexcept    {while (_pos && !_value) ++*this;}
+				void _skip_non_data() noexcept    {while (_pos && !_item) ++*this;}
 			};
 
 		public:
@@ -232,23 +255,28 @@ namespace coop
 			~forward_list()    {TODO "delete node storage"}
 
 			/*
-				Iterate over values in this list.
+				Iterate through values in the list.
+					after(n) yields an iterator following the given node.
 			*/
-			iterator begin() noexcept    {return iterator(*this);}
-			iterator end  () noexcept    {return iterator();}
+			iterator begin()           noexcept    {return iterator(*this);}
+			iterator end  ()           noexcept    {return iterator();}
+			iterator after(node &node) noexcept    {return iterator(*this, node);}
 
 			/*
-				Get an iterator starting just after the given node.
+				Iterate through nodes in the list.
+					This type of iterator stops at values and bookmarks.
 			*/
-			iterator after(node &node) noexcept    {return iterator(*this, node);}
+			node_iterator node_begin()           noexcept    {return node_iterator(*this);}
+			node_iterator node_end  ()           noexcept    {return node_iterator();}
+			node_iterator node_after(node &node) noexcept    {return node_iterator(*this, node);}
 
 			// Access the item at the front of the list.
 			std::shared_ptr<value_type> front()    {auto i = begin(); return i.release();}
 
 
-			// Insert an element after the given iterator's position.
+			// Insert an element after an iterator's position.
 			template<typename ... Args> [[nodiscard]]
-			std::shared_ptr<value_type> emplace_after(const iterator &pos, Args&& ... args)    {if (!pos._pos) return nullptr; return _emplace(pos._pos, std::forward<Args>(args)...);}
+			std::shared_ptr<value_type> emplace_after(const node_iterator &pos, Args&& ... args)    {if (!pos._pos) return nullptr; return _emplace(pos._pos, std::forward<Args>(args)...);}
 
 			// Insert an element at the head of the list.
 			template<typename ... Args> [[nodiscard]]
@@ -262,39 +290,46 @@ namespace coop
 
 			/*
 				Insert nodes manually.
-					These can be used as starting
+					This is the only way to insert bookmark nodes.
 			*/
-			void insert_after(const iterator &pos, bookmark_node &node)    {pos._pos->_insertNext(node.node_ptr());}
+			void insert_after(const node_iterator &pos, bookmark_node &node)    {_throw_if_in_list(node); pos._pos->_insertNext(node.node_ptr());}
+			void insert_after(const node_iterator &pos, value_node    &node)    {_throw_if_in_list(node); pos._pos->_insertNext(node.node_ptr());}
 
 
 		protected:
-			node                _head, _recycled;
+			start_node          _head, _recycled;
 			std::atomic<size_t> _size;
 
 			friend class iterator;
+			
+			void _throw_if_in_list(const node &node)
+			{
+				if (node._next.load(std::memory_order_relaxed).is_in_list())
+					throw std::logic_error("Node is currently part of a list.");
+			}
 
 			template<typename... Args> [[nodiscard]]
 			std::shared_ptr<value_type> _emplace(node &previous, Args&& ... args)
 			{
-				data_node *node = _alloc();
+				value_node *node = _alloc();
 				auto ref = node->slot.try_emplace(std::forward<Args>(args) ...);
 				if (ref) previous._insertNext(node->node_ptr());
-				else     _free(node);
+				else     _free(node); // shouldn't fail but handle it anyway
 				return std::move(ref);
 			}
 
-			void  _free(data_node *node) noexcept    {_recycled._insertNext(node->node_ptr());}
-			data_node* _alloc()
+			void  _free(value_node *node) noexcept    {_throw_if_in_list(*node); _recycled._insertNext(node->node_ptr());}
+			value_node* _alloc()
 			{
-				node *next = _recycled.load(), *after;
-				do after = next->_next.load();
-				while (!_recycled.compare_exchange_weak(next, after));
+				node_ptr next = _recycled._next.load(), after;
+				do after = next.get()->_next.load();
+				while (!_recycled._next.compare_exchange_weak(next, after));
 				if (!next)
 				{
 					TODO "allocate node storage"
 					TODO "push new nodes onto freelist"
 				}
-				return static_cast<data_node*>(next);
+				return static_cast<value_node*>(next.get());
 			}
 		};
 	}

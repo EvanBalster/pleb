@@ -33,9 +33,9 @@ namespace coop
 				value_type      value;
 			};
 
-			using list_t = forward_list<T>;
+			using list_t = forward_list<entry>;
 			using node_t = typename list_t::node;
-			using bookmark_t = typename list_t::bookmark;
+			using bookmark_t = typename list_t::bookmark_node;
 			using iterator = typename list_t::iterator;
 
 			static const size_t HASH_BITS = sizeof(hash_type)*8;
@@ -62,7 +62,8 @@ namespace coop
 				auto &bucket = table[hash >> _tierShift(tier)];
 				
 				for (iterator i = _list.after(bucket); i.not_end() && i->hash <= hash; ++i)
-					if (i.hash == hash && KeyEqual()(i.key, key)) return std::move(i);
+					if (i->hash == hash && KeyEqual()(i->key, key))
+						return std::move(i);
 				return _list.end();
 			}
 

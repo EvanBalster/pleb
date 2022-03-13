@@ -24,42 +24,60 @@
 namespace coop
 {
 	/*
-		A simple wait-free one-writer many-readers manager.
-			Disallows reading during a write and vice versa.
-			This construct is not fair and prefers reader performance.
-
-		try_ operations may succeed or fail and never block.
-			If successful, they return true and must be followed by a close_ call.
-			If unsuccessful, they return false: don't call close, and try again later.
-
-		A shared lock can be retained for long periods of time to lock out writers.
-			(This may be useful to implement object recycling, for example.)
+		A reference counting guard for reusable objects.
+			Works similar to the mechanisms of weak_ptr.
+		
+		Any number of accessors may visit() the passage if not closed.
+			After successful entry they should call exit().
 	*/
-	struct shared_trylock
+	struct visitor_guard
 	{
 	public:
-		shared_trylock()    : _x(0) {}
+		using int_t = int;
+		static const int_t
+			flag_open   = int_t(1) << (8*sizeof(int_t) - 2),
+			flag_locked = int_t(3) << (8*sizeof(int_t) - 2);
 
-		bool try_lock_shared() noexcept
-		{
-			if   (_x.fetch_add(1)>=0) {return true;}
-			else {_x.fetch_sub(1);    return false;}
-		}
-		void   unlock_shared() noexcept    {_x.fetch_sub(1);}
+		static_assert(flag_locked < 0);
+		static_assert(flag_locked & flag_open);
+		static_assert((flag_locked + 0xFFFF) & flag_open);
 
-		bool try_lock(size_t spins = 20) noexcept
-		{
-			while (true)
-			{
-				int r = 0;
-				if (_x.compare_exchange_weak(r, -0x1000000)) return true;
-				if (!(spins--)) return false;
-			}
-		}
-		void   unlock() noexcept    {_x.fetch_add(0x1000000);}
+	public:
+		visitor_guard(bool start_open = true)    : _x(start_open ? flag_open : 0  ) {}
+
+		// Try to enter the passage, returning whether successful.
+		//  visit() succeeds if the passage is open.
+		//  enter() succeeds if the passage is open or closed (not locked).
+		//  join () succeeds if the passage is open or not vacant.
+		//  Call leave() following a success to avoid starving lock().
+		bool visit() noexcept    {if (_x.fetch_add(1)>=flag_open) {return 1;} else {leave(); return 0;}}
+		bool join () noexcept    {if (_x.fetch_add(1)>=1)         {return 1;} else {leave(); return 0;}}
+		bool enter() noexcept    {if (_x.fetch_add(1)>=0)         {return 1;} else {leave(); return 0;}}
+		void leave() noexcept    {_x.fetch_sub(1);}
+
+		// Close or reopen this passage.
+		void close () noexcept    {_x.fetch_and(~flag_open);}
+		bool reopen() noexcept    {return _x.fetch_or(flag_open) > 0;}
+
+		// Lock up the passage
+		//  lock() will fail if the passage is open OR has visitors.
+		//  Call unlock(), and perhaps reopen(), to re-enable entry.
+		bool try_lock() noexcept    {int r = 0; return _x.compare_exchange_strong(r, flag_locked);}
+		void   unlock() noexcept    {_x.fetch_and(~flag_locked);}
+
+		// These functions may be used to observe state,
+		//  But are unsuitable for synchronizing resource access.
+		bool is_open  () const noexcept    {return  _x.load(std::memory_order_relaxed) >= flag_open;}
+		bool is_closed() const noexcept    {return  _x.load(std::memory_order_relaxed) < flag_open;}
+		bool is_locked() const noexcept    {return  _x.load(std::memory_order_relaxed) < 0;}
+
+		int_t visitors() const noexcept    {return  _x.load(std::memory_order_relaxed) & ~flag_open;}
+		bool is_vacant() const noexcept    {return (_x.load(std::memory_order_relaxed)|flag_open) == flag_open;}
+		bool can_lock () const noexcept    {return  _x.load(std::memory_order_relaxed) == 0;}
 
 	private:
-		std::atomic<int> _x;
+		// Raw value of this primitive.  Don't touch it.
+		std::atomic<int_t> _x;
 	};
 
 	/*
@@ -82,17 +100,17 @@ namespace coop
 			using value_type = T;
 
 		public:
-			slot()     {}
+			slot()     : _pass(false) {}
 			~slot()    {assert(empty());}
 
 			/*
 				Access the slot like a weak_ptr.
 			*/
 			[[nodiscard]]
-			std::shared_ptr<T> lock() const noexcept    {std::shared_ptr<T> r; if (_rw.try_lock_shared()) {r = _weak_t.lock();      _rw.unlock_shared();}; return r;}
-			std::weak_ptr  <T> weak() const noexcept    {std::weak_ptr  <T> r; if (_rw.try_lock_shared()) {r = _weak_t;             _rw.unlock_shared();} return r;}
-			long use_count()          const noexcept    {long r=0;             if (_rw.try_lock_shared()) {r = _weak_t.use_count(); _rw.unlock_shared();} return r;}
-			bool expired()            const noexcept    {bool r=1;             if (_rw.try_lock_shared()) {r = _weak_t.expired  (); _rw.unlock_shared();} return r;}
+			std::shared_ptr<T> lock() const noexcept    {std::shared_ptr<T> r; if (_pass.enter()) {r = _weak_t.lock();      _pass.leave();} return r;}
+			std::weak_ptr  <T> weak() const noexcept    {std::weak_ptr  <T> r; if (_pass.enter()) {r = _weak_t;             _pass.leave();} return r;}
+			long use_count()          const noexcept    {long r=0;             if (_pass.enter()) {r = _weak_t.use_count(); _pass.leave();} return r;}
+			bool expired()            const noexcept    {bool r=1;             if (_pass.enter()) {r = _weak_t.expired  (); _pass.leave();} return r;}
 			bool empty()              const noexcept    {return expired();}
 
 			/*
@@ -106,22 +124,23 @@ namespace coop
 				//   The initial check for !expired is a double-checking optimization.
 				std::shared_ptr<T> new_t = nullptr;
 				if (empty())
-					if (_rw.try_lock())
+					if (_pass.try_lock())
 				{
 					if (_weak_t.expired())
 						_weak_t = new_t = std::shared_ptr<T>(new (_buf) T(std::forward<Args>(args) ...), deleter{});
-					_rw.unlock();
+					_pass.unlock();
+					//_pass.reopen();
 				}
 				return new_t;
 			}
 
 		private:
-			struct deleter {void operator()(T *t) const noexcept    {t->~T();}};
+			struct deleter {void operator()(T *t) const noexcept {t->~T();}};
 
 			// TODO need a lock-free atomic weak pointer
 			alignas(T) char          _buf[sizeof(T)];
 			std::weak_ptr<T>         _weak_t;   // TODO half the weak pointer is wasted memory because it's pointing to _buf.
-			mutable shared_trylock   _rw;
+			mutable visitor_guard    _pass;
 		};
 
 		/*

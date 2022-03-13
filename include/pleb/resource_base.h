@@ -16,7 +16,7 @@ namespace coop {template<class T> class trie_;}
 namespace pleb
 {
 	/*
-		
+		Represents the internal data of a resource.
 	*/
 	class resource_data :
 		public std::enable_shared_from_this<resource_data>

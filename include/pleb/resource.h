@@ -85,13 +85,13 @@ namespace pleb
 				and the parents/ancestors of the resource.
 		*/
 		template<typename T>
-		void publish(topic_view subtopic, T &&item, status status = statuses::OK)    {this->nearest(subtopic)->publish(std::move(item), status);}
+		void publish(topic_view subtopic, T &&item, status status = statuses::OK)    {this->nearest(subtopic)->publish(std::forward<T>(item), status);}
 		void publish(topic_view subtopic,           status status)                      {this->nearest(subtopic)->publish(std::any(), status);}
 
 		template<typename T>
 		void publish(T &&item, status status = statuses::OK)
 		{
-			event event = {shared_from_this(), status, std::move(item)};
+			event event = {shared_from_this(), status, std::forward<T>(item)};
 
 			for (resource_ptr node = shared_from_this(); node; node = node->parent())
 				for (subscription &sub : (_trie::coop_type&) *node)
@@ -117,13 +117,13 @@ namespace pleb
 				If there is no service, pleb::errors::no_such_service is thrown.
 		*/
 		template<typename T> [[nodiscard]]
-		std::future<reply> request(method method, T &&item)    {std::future<reply> r; pleb::request(shared_from_this(), method, std::move(item), &r); return std::move(r);}
+		std::future<reply> request(method method, T &&item)    {std::future<reply> r; pleb::request(shared_from_this(), method, std::forward<T>(item), &r); return std::move(r);}
 
 		[[nodiscard]]                   std::future<reply> request       ()         {return request(method::GET, std::any());}
 		[[nodiscard]]                   std::future<reply> request_get   ()         {return request(method::GET, std::any());}
-		template<class T> [[nodiscard]] std::future<reply> request_put   (T &&v)    {return request(method::PUT, std::move(item));}
-		template<class T> [[nodiscard]] std::future<reply> request_post  (T &&v)    {return request(method::POST, std::move(item));}
-		template<class T> [[nodiscard]] std::future<reply> request_patch (T &&v)    {return request(method::PATCH, std::move(item));}
+		template<class T> [[nodiscard]] std::future<reply> request_put   (T &&v)    {return request(method::PUT, std::forward<T>(item));}
+		template<class T> [[nodiscard]] std::future<reply> request_post  (T &&v)    {return request(method::POST, std::forward<T>(item));}
+		template<class T> [[nodiscard]] std::future<reply> request_patch (T &&v)    {return request(method::PATCH, std::forward<T>(item));}
 		[[nodiscard]]                   std::future<reply> request_delete()         {return request(method::DELETE, std::any());}
 
 		/*
@@ -136,9 +136,9 @@ namespace pleb
 		reply sync_request(method method, T &&item)    {return request(method, std::move(item)).get();}
 
 		[[nodiscard]]                   reply sync_get   ()         {return sync_request(method::GET, std::any());}
-		template<class T> [[nodiscard]] reply sync_put   (T &&v)    {return sync_request(method::PUT, std::move(item));}
-		template<class T> [[nodiscard]] reply sync_post  (T &&v)    {return sync_request(method::POST, std::move(item));}
-		template<class T> [[nodiscard]] reply sync_patch (T &&v)    {return sync_request(method::PATCH, std::move(item));}
+		template<class T> [[nodiscard]] reply sync_put   (T &&v)    {return sync_request(method::PUT, std::forward<T>(item));}
+		template<class T> [[nodiscard]] reply sync_post  (T &&v)    {return sync_request(method::POST, std::forward<T>(item));}
+		template<class T> [[nodiscard]] reply sync_patch (T &&v)    {return sync_request(method::PATCH, std::forward<T>(item));}
 		[[nodiscard]]                   reply sync_delete()         {return sync_request(method::DELETE, std::any());}
 
 		/*
@@ -150,17 +150,17 @@ namespace pleb
 		template<typename T>
 		void push(method method, T &&item)    {pleb::request r(shared_from_this(), method, item, nullptr);}
 
-		template<class T> void push/*PUT*/(T &&v)    {push(method::PUT, std::move(v));}
-		template<class T> void push_put   (T &&v)    {push(method::PUT, std::move(v));}
-		template<class T> void push_post  (T &&v)    {push(method::POST, std::move(v));}
-		template<class T> void push_patch (T &&v)    {push(method::PATCH, std::move(v));}
+		template<class T> void push/*PUT*/(T &&v)    {push(method::PUT, std::forward<T>(v));}
+		template<class T> void push_put   (T &&v)    {push(method::PUT, std::forward<T>(v));}
+		template<class T> void push_post  (T &&v)    {push(method::POST, std::forward<T>(v));}
+		template<class T> void push_patch (T &&v)    {push(method::PATCH, std::forward<T>(v));}
 		void                   push_delete()         {push(method::DELETE, std::any());}
 
 
 		/*
 			REQUEST using a prepared pleb::request object.
 				pleb::request usually calls this method upon construction;
-				it can be used to process the same request repeatedly.
+				it can be used to p rocess the same request repeatedly.
 		*/
 		void process(pleb::request &request)
 		{
@@ -188,6 +188,7 @@ namespace pleb
 		{
 			if (destination.resource && this->make_link(child_id, std::shared_ptr<_trie>(destination.resource, (_trie*) destination.resource.get())))
 				return std::move(destination.resource);
+			return nullptr;
 		}
 
 

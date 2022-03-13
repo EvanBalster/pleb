@@ -1,4 +1,6 @@
 # PLEB (Process-Local Event Bus)
+⚠ This library is in early development.  The API is subject to change.
+
 PLEB is a header-only C++ library for implementing tiny multi-threaded microservices under hard real-time constraints.  Its basic features include:
 
 * Multiple communication patterns
@@ -7,6 +9,9 @@ PLEB is a header-only C++ library for implementing tiny multi-threaded microserv
   * Publish-subscribe
   * Surveyor-respondent*
 * On-demand type conversion (planned)
+* Wait-free, lock-free operation
+  * (topic lookup is lockful pending the completion of a suitable hashtable)
+
 
 
 

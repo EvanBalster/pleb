@@ -71,7 +71,7 @@ namespace pleb
 			std::future<pleb::reply> *reply       = nullptr,
 			bool                      process_now = true)
 			:
-			resource(std::move(_resource)), method(_method), value(std::move(_value)), _reply(reply)
+			resource(std::move(_resource)), method(_method), value(std::forward<T>(_value)), _reply(reply)
 				{if (process_now) process();}
 
 		// Make a request to the given topic with method and value.  (defined in resource.h)
@@ -88,12 +88,19 @@ namespace pleb
 		operator std::future<pleb::reply>() const    {return _reply ? std::move(*_reply) : std::future<pleb::reply>();}
 
 
-		// Access value as a specific type.
-		template<typename T> const T *cast() const noexcept    {return std::any_cast<T>(&value);}
-		template<typename T> T       *cast()       noexcept    {return std::any_cast<T>(&value);}
+		// Access value as a specific type.  Only succeeds if the type is an exact match.
+		template<class T> const T *value_cast() const noexcept    {return std::any_cast<T>(&value);}
+		template<class T> T       *value_cast()       noexcept    {return std::any_cast<T>(&value);}
 
-		// Access value, allowing it to be supplied by value or shared_ptr.
-		template<typename T> T *get() const noexcept    {return pleb::any_ptr<T>(value);}
+		// Get a constant pointer to the value.
+		//  This method automatically deals with indirect values.
+		template<class T> const T *get() const noexcept    {return pleb::any_const_ptr<T>(value);}
+
+		// Access a mutable pointer to the value.
+		//  This method automatically deals with indirect values.
+		//  This will fail when a const request holds a value directly.
+		template<class T> T       *get_mutable() const noexcept    {return pleb::any_ptr<T>(value);}
+		template<class T> T       *get_mutable()       noexcept    {return pleb::any_ptr<T>(value);}
 
 		/*
 			Post an immediate reply.
