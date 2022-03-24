@@ -12,26 +12,23 @@ namespace pleb
 			target_resource       resource,
 			subscriber_function &&function) noexcept                   {return resource->subscribe(std::move(function));}
 
-	// Subscribe to a topic, providing a handler object and method.
+	// Subscribe to a topic, providing a lockable handler pointer and method.
 	template<class T> [[nodiscard]] std::shared_ptr<subscription>
 		subscribe(
-			target_resource resource,
-			T              *handler_object,
-			void       (T::*handler_method)(const pleb::event&))       {return subscribe(std::move(resource), std::bind(handler_method, handler_object, std::placeholders::_1));}
+			target_resource  resource,
+			std::weak_ptr<T> handler_object,
+			void        (T::*handler_method)(const pleb::event&))       {return subscribe(std::move(resource), [m=handler_method, w=std::move(handler_object)](const event &r) {if (auto s=w.lock()) (s->*m)(r);});}
 
 
 	// Publish a value to a topic.
-	template<typename T>
+	template<typename T = std::any>
 	void publish(
 			target_nearest_resource resource,
-			T                     &&item,
-			status                  status = statuses::OK) noexcept    {return resource->publish(std::forward<T>(item), status);}
-
-	// Publish only a status to a topic.
-	inline void publish(
-		target_nearest_resource resource,
-		status                  status) noexcept                       {return resource->publish(status);}
+			status                  status = statuses::OK,
+			T                     &&value  = {}) noexcept              {return resource->publish(status, std::forward<T>(value));}
 	
+
+
 
 	// Serve a resource.
 	[[nodiscard]] inline std::shared_ptr<service>
@@ -39,11 +36,12 @@ namespace pleb
 			target_resource    resource,
 			service_function &&function) noexcept                      {return resource->serve(std::move(function));}
 
+	// Serve a resource, providing a lockable service pointer and method.
 	template<class T> [[nodiscard]] std::shared_ptr<service>
 		serve(
-			target_resource resource,
-			T              *service_object,
-			void       (T::*service_method)(request&))                 {return serve(std::move(resource), std::bind(service_method, service_object, std::placeholders::_1));}
+			target_resource  resource,
+			std::weak_ptr<T> service_object,
+			void        (T::*service_method)(request&))                 {return serve(std::move(resource), [m=service_method, w=std::move(service_object)](request &r) {if (auto s=w.lock()) (s->*m)(r);});}
 
 
 	// Make a request with asynchronous reply.

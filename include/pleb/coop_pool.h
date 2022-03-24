@@ -120,26 +120,37 @@ namespace coop
 			template<typename ... Args>
 			[[nodiscard]] std::shared_ptr<T> try_emplace(Args && ... args)
 			{
-				// Lock this slot if it is not being read, then attempt to fill it if it is empty.
-				//   The initial check for !expired is a double-checking optimization.
-				std::shared_ptr<T> new_t = nullptr;
-				if (empty())
-					if (_pass.try_lock())
+				std::shared_ptr<T> result = {};
+				if (empty()) if (_pass.try_lock())
 				{
 					if (_weak_t.expired())
-						_weak_t = new_t = std::shared_ptr<T>(new (_buf) T(std::forward<Args>(args) ...), deleter{});
+						_weak_t = result = std::shared_ptr<T>(new (_buf) T(std::forward<Args>(args) ...), deleter{});
 					_pass.unlock();
-					//_pass.reopen();
 				}
-				return new_t;
+				return result;
+			}
+
+			/*
+				Try to fill the slot with a weak pointer to an arbitrary instance of T.
+					Fails, returning false, if the slot already has a referent.
+					When using an external weak pointer, this slot's memory remains fallow.
+			*/
+			bool try_insert(const std::weak_ptr<T> &elem) noexcept
+			{
+				bool success = false;
+				if (empty()) if (_pass.try_lock())
+				{
+					if (_weak_t.expired()) {_weak_t = elem; success = true;}
+					_pass.unlock();
+				}
+				return success;
 			}
 
 		private:
 			struct deleter {void operator()(T *t) const noexcept {t->~T();}};
 
-			// TODO need a lock-free atomic weak pointer
-			alignas(T) char          _buf[sizeof(T)];
-			std::weak_ptr<T>         _weak_t;   // TODO half the weak pointer is wasted memory because it's pointing to _buf.
+			alignas(T) char          _buf[sizeof(T)]; // Memory for in-place allocation
+			std::weak_ptr<T>         _weak_t;
 			mutable visitor_guard    _pass;
 		};
 

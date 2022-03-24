@@ -82,6 +82,6 @@ int main(int argc, char **argv)
 	{
 		auto canPrintString = pleb::subscribe("print/string", &printString);
 
-		pleb::publish("print/string", std::string("this is a fancy string"));
+		pleb::publish<std::string>("print/string", pleb::statuses::OK, std::string("this is a fancy string"));
 	}
 }

@@ -55,8 +55,8 @@ namespace pleb
 
 
 	private:
-		coop::unmanaged::pool<subscription> _subs;
-		service_slot                        _service;
+		subscriber_list _subs;
+		service_slot    _service;
 	};
 }
 

@@ -1,0 +1,82 @@
+digraph G {
+    
+    concentrate=false;
+    splines=false;
+
+    label="Atomic Passage"
+
+    rankdir=LR
+
+    subgraph pop_0
+    {
+        rank=same;
+        rankdir=TB;
+        opened     [label="opened", shape="square"]
+        closed   [label="closed", shape="square"]
+        locked   [label="locked", shape="square" color=red]
+    }
+    subgraph pop_1
+    {
+        rank=same;
+        rankdir=TB;
+        opened_1   [label="opened,\n1 user", shape="square"]
+        closed_1 [label="closed,\n1 user", shape="square"]
+        locked_1 [label="block\n1 user", shape="square", style=dashed color=red]
+    }
+    subgraph pop_2
+    {
+        rank=same;
+        rankdir=TB;
+        opened_2   [label="opened,\n2 users", shape="square"]
+        closed_2 [label="closed,\n2 users", shape="square"]
+    }
+    subgraph pop_N
+    {
+        rank=same;
+        rankdir=TB;
+        opened_N [label="...etc...", shape="square" color=gray]
+        closed_N [label="...etc...", shape="square" color=gray]
+    }
+
+    opened:nw   -> closed:sw  [label="close" color=orange]
+    opened_1:nw -> closed_1:sw[label="close" color=orange]
+    opened_2:nw -> closed_2:sw[label="" color=orange]
+    opened_N:nw -> closed_N:sw[label="" color=orange]
+    closed   -> opened  [label="open"  color=orange]
+    closed_1 -> opened_1[label="open"  color=orange]
+    closed_2 -> opened_2[label=""  color=orange]
+    closed_N -> opened_N[label=""  color=orange]
+    
+    locked -> locked_1:W [dir=both, label="⛔visit" color=blue, style=dotted]
+    locked:ne -> locked_1:nw [dir=both, label="⛔enter" color=purple, style=dotted]
+
+    /*closed:w -> closed  [label="visit\n(fail)" color=blue style=dashed]*/
+    closed_1:sw -> closed  :se[label="leave"]
+    closed_2:sw -> closed_1:se
+    closed_N:sw -> closed_2:se
+    closed   -> closed_1:w[label="⛔visit" dir=both, color=blue, style=dotted]
+    closed_1 -> closed_2:w[dir=both, color=blue, style=dotted]
+    closed_2 -> closed_N:w[dir=both, color=blue, style=dotted]
+    closed:ne   -> closed_1:nw[color=purple, label="enter"]
+    closed_1:ne -> closed_2:nw[color=purple]
+    closed_2:ne -> closed_N:nw[color=purple]
+
+    opened_1:sw -> opened  :se[label="leave"]
+    opened_2:sw -> opened_1:se
+    opened_N:sw -> opened_2:se
+    opened   -> opened_1[color=blue, label="visit"]
+    opened_1 -> opened_2[color=blue]
+    opened_2 -> opened_N[color=blue]
+    opened:ne   -> opened_1:nw[color=purple, label="enter"]
+    opened_1:ne -> opened_2:nw[color=purple]
+    opened_2:ne -> opened_N:nw[color=purple]
+
+    closed:nw -> locked:sw[label="lock" color=red]
+   /* closed_1:ne -> closed_1[label="lock\n(fail)" color=red style=dashed]
+    opened:w -> opened[label="lock\n(fail)" color=red style=dashed]
+    opened_1:ne -> opened_1[label="lock\n(fail)" color=red style=dashed]*/
+
+    locked   -> closed[label="unlock" color=red]
+    locked_1 -> closed_1[label="unlock" color=red, style=dashed]
+
+}

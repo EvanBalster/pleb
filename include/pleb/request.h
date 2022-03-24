@@ -106,7 +106,7 @@ namespace pleb
 			Post an immediate reply.
 		*/
 		template<class T = std::any>
-		void reply(status status = 200, T &&value = {}) const
+		void reply(status status, T &&value = {}) const
 		{
 			if (!_reply) return;
 			promise_t p; p.set_value(pleb::reply{status, std::move(value)});
@@ -118,6 +118,23 @@ namespace pleb
 		*/
 		std::promise<pleb::reply> promise()                               const    {promise_t p; promise(p.get_future()); return std::move(p);}
 		void                      promise(std::future<pleb::reply> reply) const    {if (_reply) *_reply = std::move(reply);}
+
+
+		/*
+			Convenience methods for replying with common statuses.
+		*/
+#define REPLY_SHORTHAND(MethodName, Status)    template<class T = std::any> void MethodName(T &&value = {}) {reply(Status, std::forward<T>(value));}  enum {}
+
+		REPLY_SHORTHAND( reply_OK,                   statuses::OK );
+		REPLY_SHORTHAND( reply_Created,              statuses::Created );
+
+		REPLY_SHORTHAND( reply_NotFound,             statuses::NotFound );
+		REPLY_SHORTHAND( reply_MethodNotAllowed,     statuses::MethodNotAllowed );
+		REPLY_SHORTHAND( reply_Gone,                 statuses::Gone );
+		REPLY_SHORTHAND( reply_UnsupportedMediaType, statuses::UnsupportedMediaType );
+
+		REPLY_SHORTHAND( reply_InternalServerError,  statuses::InternalServerError );
+		REPLY_SHORTHAND( reply_NotImplemented,       statuses::NotImplemented );
 	};
 
 	
