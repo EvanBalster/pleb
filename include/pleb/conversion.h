@@ -39,7 +39,7 @@ namespace pleb
 	T convert(const std::any &source)
 	{
 		// Try a direct copy from a view of the value.
-		if (auto *ptr = any_const_ptr(source)) return *ptr;
+		if (auto *ptr = any_const_ptr<T>(source)) return *ptr;
 		throw std::bad_any_cast();
 	}
 
@@ -47,7 +47,7 @@ namespace pleb
 	bool try_convert(const std::any &source, T &destination)
 	{
 		// Try a direct view of the value
-		if (auto *v = any_const_ptr(source)) destination = *v;
+		if (auto *v = any_const_ptr<T>(source)) destination = *v;
 		return false;
 	}
 
