@@ -61,10 +61,13 @@ namespace coop
 				
 				auto &bucket = table[hash >> _tierShift(tier)];
 				
-				for (iterator i = _list.after(bucket); i.not_end() && i->hash <= hash; ++i)
-					if (i->hash == hash && KeyEqual()(i->key, key))
-						return std::move(i);
-				return _list.end();
+				iterator i = _list.after(bucket);
+				for (; i.not_end(); ++i)
+				{
+					if (i-> hash > hash) {i = _list.end(); break;}
+					if (i->hash == hash && KeyEqual()(i->key, key)) break;	
+				}
+				return i;
 			}
 
 		protected:

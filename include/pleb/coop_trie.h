@@ -56,7 +56,7 @@ namespace coop
 				The path is a list of ancestors, not including the root.
 		*/
 		std::string_view id  ()                     const noexcept    {return _id;}
-		std::string      path(char separator = '/') const             {std::string s; _path(s,separator); return std::move(s);}
+		std::string      path(char separator = '/') const             {std::string s; _path(s,separator); return s;}
 
 
 		/*

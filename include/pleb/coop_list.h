@@ -315,7 +315,7 @@ namespace coop
 				auto ref = node->slot.try_emplace(std::forward<Args>(args) ...);
 				if (ref) previous._insertNext(node->node_ptr());
 				else     _free(node); // shouldn't fail but handle it anyway
-				return std::move(ref);
+				return ref;
 			}
 
 			void  _free(value_node *node) noexcept    {_throw_if_in_list(*node); _recycled._insertNext(node->node_ptr());}
