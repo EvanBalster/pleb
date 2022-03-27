@@ -17,7 +17,7 @@ namespace pleb
 		subscribe(
 			target_resource  resource,
 			std::weak_ptr<T> handler_object,
-			void        (T::*handler_method)(const pleb::event&))       {return subscribe(std::move(resource), [m=handler_method, w=std::move(handler_object)](const event &r) {if (auto s=w.lock()) (s->*m)(r);});}
+			void        (T::*handler_method)(const pleb::event&))       {return subscribe(std::move(resource), [m=handler_method, w=std::move(handler_object)](const event &r) {if (auto s=w.lock()) (s.get()->*m)(r);});}
 
 
 	// Publish a value to a topic.
@@ -41,7 +41,7 @@ namespace pleb
 		serve(
 			target_resource  resource,
 			std::weak_ptr<T> service_object,
-			void        (T::*service_method)(request&))                 {return serve(std::move(resource), [m=service_method, w=std::move(service_object)](request &r) {if (auto s=w.lock()) (s->*m)(r);});}
+			void        (T::*service_method)(request&))                 {return serve(std::move(resource), [m=service_method, w=std::move(service_object)](request &r) {if (auto s=w.lock()) (s.get()->*m)(r);});}
 
 
 	// Make a request with asynchronous reply.
