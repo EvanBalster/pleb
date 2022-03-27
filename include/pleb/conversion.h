@@ -14,7 +14,7 @@ namespace pleb
 	template<typename T>
 	T *any_ptr(const std_any::any &value)
 	{
-		if (auto t = std_any::any_cast<std_any::shared_ptr<T>>(&value)) return &**t;
+		if (auto t = std_any::any_cast<std::shared_ptr<T>>(&value)) return &**t;
 		//if (auto t = std_any::any_cast<T*>                (&value)) return *t;
 		return nullptr;
 	}
@@ -28,7 +28,7 @@ namespace pleb
 	const T *any_const_ptr(const std_any::any &value)
 	{
 		if (auto t = std_any::any_cast<T>                       (&value)) return t;
-		if (auto t = std_any::any_cast<std_any::shared_ptr<const T>>(&value)) return &**t;
+		if (auto t = std_any::any_cast<std::shared_ptr<const T>>(&value)) return &**t;
 		//if (auto t = std_any::any_cast<const T*>                (&value)) return &**t;
 		return any_ptr<T>(value);
 	}
