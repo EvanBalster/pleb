@@ -29,12 +29,12 @@ namespace pleb
 	public:
 		const resource_ptr resource;
 		const pleb::status status; // Conventionally set to an HTTP status code, or zero.
-		std::any           value;
+		std_any::any       value;
 
 	public:
 		// Access value as a specific type.  Only succeeds if the type is an exact match.
-		template<class T> const T *value_cast() const noexcept    {return std::any_cast<T>(&value);}
-		template<class T> T       *value_cast()       noexcept    {return std::any_cast<T>(&value);}
+		template<class T> const T *value_cast() const noexcept    {return std_any::any_cast<T>(&value);}
+		template<class T> T       *value_cast()       noexcept    {return std_any::any_cast<T>(&value);}
 
 		// Get a constant pointer to the value.
 		//  This method automatically deals with indirect values.

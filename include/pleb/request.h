@@ -44,8 +44,8 @@ namespace pleb
 	class reply
 	{
 	public:
-		status   status;
-		std::any value;
+		status       status;
+		std_any::any value;
 	};
 
 
@@ -54,7 +54,7 @@ namespace pleb
 	public:
 		const resource_ptr resource;
 		const method       method;
-		std::any           value;
+		std_any::any       value;
 		
 	private:
 		using promise_t = std::promise<pleb::reply>;
@@ -89,8 +89,8 @@ namespace pleb
 
 
 		// Access value as a specific type.  Only succeeds if the type is an exact match.
-		template<class T> const T *value_cast() const noexcept    {return std::any_cast<T>(&value);}
-		template<class T> T       *value_cast()       noexcept    {return std::any_cast<T>(&value);}
+		template<class T> const T *value_cast() const noexcept    {return std_any::any_cast<T>(&value);}
+		template<class T> T       *value_cast()       noexcept    {return std_any::any_cast<T>(&value);}
 
 		// Get a constant pointer to the value.
 		//  This method automatically deals with indirect values.
@@ -105,7 +105,7 @@ namespace pleb
 		/*
 			Post an immediate reply.
 		*/
-		template<class T = std::any>
+		template<class T = std_any::any>
 		void reply(status status, T &&value = {}) const
 		{
 			if (!_reply) return;
@@ -123,7 +123,7 @@ namespace pleb
 		/*
 			Convenience methods for replying with common statuses.
 		*/
-#define REPLY_SHORTHAND(MethodName, Status)    template<class T = std::any> void MethodName(T &&value = {}) {reply(Status, std::forward<T>(value));}
+#define REPLY_SHORTHAND(MethodName, Status)    template<class T = std_any::any> void MethodName(T &&value = {}) {reply(Status, std::forward<T>(value));}
 
 		REPLY_SHORTHAND( reply_OK,                   statuses::OK )
 		REPLY_SHORTHAND( reply_Created,              statuses::Created )

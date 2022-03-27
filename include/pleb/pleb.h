@@ -21,7 +21,7 @@ namespace pleb
 
 
 	// Publish a value to a topic.
-	template<typename T = std::any>
+	template<typename T = std_any::any>
 	void publish(
 			target_nearest_resource resource,
 			status                  status = statuses::OK,

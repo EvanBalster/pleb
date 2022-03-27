@@ -4,13 +4,23 @@
 
 #include <string_view>
 #include <functional>
-#include <any>
+#ifdef PLEB_REPLACEMENT_ANY_HEADER
+	#include PLEB_REPLACEMENT_ANY_HEADER
+#else
+	#include <any>
+#endif
 #include "coop_pool.h"
 #include "coop_trie.h"
 
 
 namespace pleb
 {
+#ifdef PLEB_REPLACEMENT_ANY_NAMESPACE
+	namespace std_any = ::PLEB_REPLACEMENT_ANY_NAMESPACE;
+#else
+	namespace std_any = ::std;
+#endif
+
 	/*
 		Resources are used to route all communications through PLEB.
 			Pointers to resources may be stored to keep them alive and

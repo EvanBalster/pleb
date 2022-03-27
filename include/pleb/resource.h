@@ -84,10 +84,10 @@ namespace pleb
 				This will be visible to all subscribers to a resource,
 				and the parents/ancestors of the resource.
 		*/
-		template<typename T = std::any>
+		template<typename T = std_any::any>
 		void publish(topic_view subtopic, status status = statuses::OK, T &&item = {})    {this->nearest(subtopic)->publish(status, std::forward<T>(item));}
 
-		template<typename T = std::any>
+		template<typename T = std_any::any>
 		void publish(                     status status = statuses::OK, T &&item = {})
 		{
 			event event = {shared_from_this(), status, std::forward<T>(item)};
@@ -112,15 +112,15 @@ namespace pleb
 				A reply may be provided asynchronously by the registered service.
 				If there is no service, pleb::errors::no_such_service is thrown.
 		*/
-		template<typename T> [[nodiscard]]
-		std::future<reply> request(method method, T &&item)    {std::future<reply> r; pleb::request(shared_from_this(), method, std::forward<T>(item), &r); return std::move(r);}
+		template<typename T = std_any::any> [[nodiscard]]
+		std::future<reply> request(method method, T &&item = {})    {std::future<reply> r; pleb::request(shared_from_this(), method, std::forward<T>(item), &r); return std::move(r);}
 
-		[[nodiscard]]                   std::future<reply> request       ()         {return request(method::GET, std::any());}
-		[[nodiscard]]                   std::future<reply> request_get   ()         {return request(method::GET, std::any());}
+		[[nodiscard]]                   std::future<reply> request       ()         {return request(method::GET);}
+		[[nodiscard]]                   std::future<reply> request_get   ()         {return request(method::GET);}
 		template<class T> [[nodiscard]] std::future<reply> request_put   (T &&v)    {return request(method::PUT, std::forward<T>(v));}
 		template<class T> [[nodiscard]] std::future<reply> request_post  (T &&v)    {return request(method::POST, std::forward<T>(v));}
 		template<class T> [[nodiscard]] std::future<reply> request_patch (T &&v)    {return request(method::PATCH, std::forward<T>(v));}
-		[[nodiscard]]                   std::future<reply> request_delete()         {return request(method::DELETE, std::any());}
+		[[nodiscard]]                   std::future<reply> request_delete()         {return request(method::DELETE);}
 
 		/*
 			REQUEST something from this resource.
@@ -128,14 +128,14 @@ namespace pleb
 				This may require the current thread to block until the reply is available.
 				If there is no service, pleb::errors::no_such_service is thrown.
 		*/
-		template<typename T> [[nodiscard]]
-		reply sync_request(method method, T &&item)    {return request(method, std::move(item)).get();}
+		template<typename T = std_any::any> [[nodiscard]]
+		reply sync_request(method method, T &&item = {})    {return request(method, std::move(item)).get();}
 
-		[[nodiscard]]                   reply sync_get   ()         {return sync_request(method::GET, std::any());}
+		[[nodiscard]]                   reply sync_get   ()         {return sync_request(method::GET);}
 		template<class T> [[nodiscard]] reply sync_put   (T &&v)    {return sync_request(method::PUT, std::forward<T>(v));}
 		template<class T> [[nodiscard]] reply sync_post  (T &&v)    {return sync_request(method::POST, std::forward<T>(v));}
 		template<class T> [[nodiscard]] reply sync_patch (T &&v)    {return sync_request(method::PATCH, std::forward<T>(v));}
-		[[nodiscard]]                   reply sync_delete()         {return sync_request(method::DELETE, std::any());}
+		[[nodiscard]]                   reply sync_delete()         {return sync_request(method::DELETE);}
 
 		/*
 			PUSH data or commands to a resource.
@@ -143,14 +143,14 @@ namespace pleb
 				There is no mechanism for a direct reply (this may improve performance).
 				If there is no service, pleb::errors::no_such_service is thrown.
 		*/
-		template<typename T>
-		void push(method method, T &&item)    {pleb::request r(shared_from_this(), method, item, nullptr);}
+		template<typename T = std_any::any>
+		void push(method method, T &&item = {})    {pleb::request r(shared_from_this(), method, item, nullptr);}
 
 		template<class T> void push/*PUT*/(T &&v)    {push(method::PUT, std::forward<T>(v));}
 		template<class T> void push_put   (T &&v)    {push(method::PUT, std::forward<T>(v));}
 		template<class T> void push_post  (T &&v)    {push(method::POST, std::forward<T>(v));}
 		template<class T> void push_patch (T &&v)    {push(method::PATCH, std::forward<T>(v));}
-		void                   push_delete()         {push(method::DELETE, std::any());}
+		void                   push_delete()         {push(method::DELETE);}
 
 
 		/*
