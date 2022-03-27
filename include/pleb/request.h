@@ -123,18 +123,18 @@ namespace pleb
 		/*
 			Convenience methods for replying with common statuses.
 		*/
-#define REPLY_SHORTHAND(MethodName, Status)    template<class T = std::any> void MethodName(T &&value = {}) {reply(Status, std::forward<T>(value));}  enum {}
+#define REPLY_SHORTHAND(MethodName, Status)    template<class T = std::any> void MethodName(T &&value = {}) {reply(Status, std::forward<T>(value));}
 
-		REPLY_SHORTHAND( reply_OK,                   statuses::OK );
-		REPLY_SHORTHAND( reply_Created,              statuses::Created );
+		REPLY_SHORTHAND( reply_OK,                   statuses::OK )
+		REPLY_SHORTHAND( reply_Created,              statuses::Created )
 
-		REPLY_SHORTHAND( reply_NotFound,             statuses::NotFound );
-		REPLY_SHORTHAND( reply_MethodNotAllowed,     statuses::MethodNotAllowed );
-		REPLY_SHORTHAND( reply_Gone,                 statuses::Gone );
-		REPLY_SHORTHAND( reply_UnsupportedMediaType, statuses::UnsupportedMediaType );
+		REPLY_SHORTHAND( reply_NotFound,             statuses::NotFound )
+		REPLY_SHORTHAND( reply_MethodNotAllowed,     statuses::MethodNotAllowed )
+		REPLY_SHORTHAND( reply_Gone,                 statuses::Gone )
+		REPLY_SHORTHAND( reply_UnsupportedMediaType, statuses::UnsupportedMediaType )
 
-		REPLY_SHORTHAND( reply_InternalServerError,  statuses::InternalServerError );
-		REPLY_SHORTHAND( reply_NotImplemented,       statuses::NotImplemented );
+		REPLY_SHORTHAND( reply_InternalServerError,  statuses::InternalServerError )
+		REPLY_SHORTHAND( reply_NotImplemented,       statuses::NotImplemented )
 	};
 
 	
