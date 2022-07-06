@@ -25,10 +25,22 @@ namespace coop
 {
 	/*
 		A reference counting guard for reusable objects.
-			Works similar to the mechanisms of weak_ptr.
+			Compare to shared_mutex and weak_ptr.
 		
-		Any number of accessors may visit() the passage if not closed.
-			After successful entry they should call exit().
+		Think of it as the front door of a shop.
+
+		STATE: | LOCKED | CLOSED | OPEN
+		VACANT:|   Y    | Y | N | Y | N
+		------ |--------|--------|-------
+		visit  |   no   |   no   | yes
+		enter  |   no   | if occ | yes
+		enter  |   no   |  yes   | yes
+		leave  |  yes   |  yes   | yes
+		reopen |   no   |  yes   | ignore
+		close  |   no   | ignore | yes
+
+			It may be open, closed or locked.
+			It may be vacant or have a known number of occupants.
 	*/
 	struct visitor_guard
 	{
@@ -36,7 +48,8 @@ namespace coop
 		using int_t = int;
 		static const int_t
 			flag_open   = int_t(1) << (8*sizeof(int_t) - 2),
-			flag_locked = int_t(3) << (8*sizeof(int_t) - 2);
+			flag_locked = int_t(3) << (8*sizeof(int_t) - 2),
+			mask_occupants = ~(flag_open | flag_locked);
 
 		static_assert(flag_locked < 0);
 		static_assert(flag_locked & flag_open);
@@ -62,8 +75,9 @@ namespace coop
 		// Lock up the passage
 		//  lock() will fail if the passage is open OR has visitors.
 		//  Call unlock(), and perhaps reopen(), to re-enable entry.
-		bool try_lock() noexcept    {int r = 0; return _x.compare_exchange_strong(r, flag_locked);}
-		void   unlock() noexcept    {_x.fetch_and(~flag_locked);}
+		bool try_lock       () noexcept    {int r = 0; return _x.compare_exchange_strong(r, flag_locked);}
+		void unlock         () noexcept    {_x.fetch_and(~flag_locked);}
+		void unlock_and_open() noexcept    {_x.fetch_and((~flag_locked) | flag_open);}
 
 		// These functions may be used to observe state,
 		//  But are unsuitable for synchronizing resource access.
@@ -71,9 +85,10 @@ namespace coop
 		bool is_closed() const noexcept    {return  _x.load(std::memory_order_relaxed) < flag_open;}
 		bool is_locked() const noexcept    {return  _x.load(std::memory_order_relaxed) < 0;}
 
-		int_t visitors() const noexcept    {return  _x.load(std::memory_order_relaxed) & ~flag_open;}
-		bool is_vacant() const noexcept    {return (_x.load(std::memory_order_relaxed)|flag_open) == flag_open;}
-		bool can_lock () const noexcept    {return  _x.load(std::memory_order_relaxed) == 0;}
+		// Check the occupancy state of the 
+		int_t occupants() const noexcept    {return  _x.load(std::memory_order_relaxed) & mask_occupants;}
+		bool  is_vacant() const noexcept    {return occupants() == 0;}
+		bool  can_lock () const noexcept    {return  _x.load(std::memory_order_relaxed) == 0;}
 
 	private:
 		// Raw value of this primitive.  Don't touch it.
@@ -88,8 +103,13 @@ namespace coop
 	namespace unmanaged
 	{
 		/*
-			A coop with space for only a single object.
+			A coop with space for allocating a single object.
+				Also allows a reference to an external (inserted) object.
 				Used as a building block for more complex coops.
+
+				This is effectively a lock-free producer-consumer construct.
+				Instead of blocking, producer operations (emplace/insert)
+				are allowed to fail spuriously due to concurrent access attempts.
 
 			This class is 'unmanaged' [see warning above].
 		*/
@@ -106,7 +126,7 @@ namespace coop
 			/*
 				Access the slot like a weak_ptr.
 			*/
-			[[nodiscard]]
+			[[nodiscard]]  // we use enter() rather than visit() to support inserted items.
 			std::shared_ptr<T> lock() const noexcept    {std::shared_ptr<T> r; if (_pass.enter()) {r = _weak_t.lock();      _pass.leave();} return r;}
 			std::weak_ptr  <T> weak() const noexcept    {std::weak_ptr  <T> r; if (_pass.enter()) {r = _weak_t;             _pass.leave();} return r;}
 			long use_count()          const noexcept    {long r=0;             if (_pass.enter()) {r = _weak_t.use_count(); _pass.leave();} return r;}
@@ -123,15 +143,18 @@ namespace coop
 				std::shared_ptr<T> result = {};
 				if (empty()) if (_pass.try_lock())
 				{
-					if (_weak_t.expired())
-						_weak_t = result = std::shared_ptr<T>(new (_buf) T(std::forward<Args>(args) ...), deleter{});
-					_pass.unlock();
+					// lock success implies _pass was closed -- obviating double check for expired()
+					new (_buf) T(std::forward<Args>(args) ...);
+					result = std::shared_ptr<T>(std::shared_ptr<slot>(this, deleter{}), _emplaced_item());
+					_weak_t = result; // weak pointer protected by lock
+					_pass.unlock_and_open();
 				}
 				return result;
 			}
 
 			/*
 				Try to fill the slot with a weak pointer to an arbitrary instance of T.
+					This allows child classes of T to be referenced by a slot.
 					Fails, returning false, if the slot already has a referent.
 					When using an external weak pointer, this slot's memory remains fallow.
 			*/
@@ -140,18 +163,43 @@ namespace coop
 				bool success = false;
 				if (empty()) if (_pass.try_lock())
 				{
-					if (_weak_t.expired()) {_weak_t = elem; success = true;}
-					_pass.unlock();
+					// lock success implies _pass was closed -- obviating double check for expired()
+					_weak_t = elem; // weak pointer protected by lock
+					success = true;
+					_pass.unlock(); // _pass is left closed because we don't need to wait on deleter.
+					// This construct
 				}
 				return success;
 			}
 
 		private:
-			struct deleter {void operator()(T *t) const noexcept {t->~T();}};
+			/*
+				A slot may cycle through these states:
+					empty     [pass closed, no instance]
+					emplacing [pass locked for construction, then open]
+					open      [pass open, object valid]
+					expired   [pass OPEN until object is destroyed, then closed]
+					empty again
 
+				Alternatively, if an object is inserted, progression is:
+					empty
+					inserting [pass locked for insert, then unlocked but closed]
+					closed    [pass closed but can be enter()'d, referent valid]
+					empty     [pass closed, referent is gone]
+			*/
 			alignas(T) char          _buf[sizeof(T)]; // Memory for in-place allocation
 			std::weak_ptr<T>         _weak_t;
 			mutable visitor_guard    _pass;
+
+			T *_emplaced_item() noexcept    {return reinterpret_cast<T*>(_buf);}
+
+			struct deleter;
+			friend struct deleter;
+			struct deleter {void operator()(slot<T> *s) const noexcept
+			{
+				s->_emplaced_item()->~T();
+				s->_pass.close(); // signals that the slot is now empty
+			}};
 		};
 
 		/*

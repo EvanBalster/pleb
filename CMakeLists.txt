@@ -13,7 +13,6 @@ find_package (Threads)
 # Library project
 project(pleb)
 
-file(GLOB ARO_HEADERS  include/aro/*.h)
 file(GLOB PLEB_HEADERS include/pleb/*.h)
 
 #add_library(pleb STATIC ${TELLING_HEADERS})
@@ -25,7 +24,7 @@ project(pleb_test)
 
 # add the executable
 file(GLOB TEST_SOURCES test/*.*)
-add_executable(pleb_test ${ARO_HEADERS} ${PLEB_HEADERS} ${TEST_SOURCES})
+add_executable(pleb_test ${PLEB_HEADERS} ${TEST_SOURCES})
 
 target_include_directories(pleb_test PUBLIC "include")
 
