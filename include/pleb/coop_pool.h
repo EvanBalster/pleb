@@ -10,13 +10,13 @@
 
 /*
 	This header defines wait-free "co-operative" allocation pools.
-		These are collections of vacant and occupied residences for objects.
+		These are collections of vacant and occupied 'residences' for objects.
 		Emplacing, removing and iterating over valid elements are wait-free operations.
 		Priority is placed on iterator performance.
 
 	"Co-operative sets" are owned by their members, unlike traditional collections.
-		The existence of the collective container is supported by item within;
-		hence, it shall not cease to exist until after its last member does.
+		The existence of the collective container is supported by items within;
+		hence, it shall not cease to exist until after its last member expires.
 		For brevity, we use the term "coop" in code.
 */
 
@@ -96,9 +96,9 @@ namespace coop
 	};
 
 	/*
-		The 'unmanaged' namespace defines coops which do not ensure member ownership.
+		The 'unmanaged' namespace defines coops which do not enforce member ownership.
 			Users of the unmanaged containers must guarantee that members hold some
-			direct or indirect ownership 
+			direct or indirect ownership owner the containers in which they reside.
 	*/
 	namespace unmanaged
 	{

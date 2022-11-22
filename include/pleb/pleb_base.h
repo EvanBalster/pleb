@@ -1,25 +1,11 @@
 #pragma once
 
-
-
 #include <string_view>
 #include <functional>
-#ifdef PLEB_REPLACEMENT_ANY_HEADER
-	#include PLEB_REPLACEMENT_ANY_HEADER
-#else
-	#include <any>
-#endif
-#include "coop_pool.h"
-#include "coop_trie.h"
-
 
 namespace pleb
 {
-#ifdef PLEB_REPLACEMENT_ANY_NAMESPACE
-	namespace std_any = ::PLEB_REPLACEMENT_ANY_NAMESPACE;
-#else
-	namespace std_any = ::std;
-#endif
+#define PLEB_ND [[nodiscard]] inline
 
 	/*
 		Resources are used to route all communications through PLEB.
@@ -108,71 +94,52 @@ namespace pleb
 		"resource identity" designed for use in functions referring to a resource.
 			Accepts string arguments or resource pointers.
 	*/
-	class target_resource
+	class resource_ref : public std::shared_ptr<resource>
 	{
 	public:
-		resource_ptr resource;
+		using shared_ptr::shared_ptr;
 
-		target_resource(resource_ptr _resource)      : resource(std::move(_resource)) {}
-
-		target_resource(topic_view         topic)    : resource(find_resource(topic)) {}
-		target_resource(const std::string& topic)    : resource(find_resource(topic)) {}
-		target_resource(std::string_view   topic)    : resource(find_resource(topic)) {}
-		target_resource(const char*        topic)    : resource(find_resource(topic)) {}
-
-		// Access the resource
-		pleb::resource *operator->() const noexcept    {return  resource.get();}
-		pleb::resource &operator* () const noexcept    {return *resource.get();}
-		operator resource_ptr()      const noexcept    {return  resource;}
-		resource_ptr release()             noexcept    {return std::move(resource);}
+		resource_ref(topic_view         topic)    : shared_ptr(find_resource(topic)) {}
+		resource_ref(const std::string& topic)    : shared_ptr(find_resource(topic)) {}
+		resource_ref(std::string_view   topic)    : shared_ptr(find_resource(topic)) {}
+		resource_ref(const char*        topic)    : shared_ptr(find_resource(topic)) {}
 	};
 
-	class target_nearest_resource
+	class nearest_resource_ref : public std::shared_ptr<resource>
 	{
 	public:
-		resource_ptr resource;
+		using shared_ptr::shared_ptr;
 
-		target_nearest_resource(resource_ptr _resource)      : resource(std::move(_resource)) {}
-
-		target_nearest_resource(topic_view         topic)    : resource(find_nearest_resource(topic)) {}
-		target_nearest_resource(const std::string& topic)    : resource(find_nearest_resource(topic)) {}
-		target_nearest_resource(std::string_view   topic)    : resource(find_nearest_resource(topic)) {}
-		target_nearest_resource(const char*        topic)    : resource(find_nearest_resource(topic)) {}
-
-		// Access the resource
-		pleb::resource *operator->() const noexcept    {return  resource.get();}
-		pleb::resource &operator* () const noexcept    {return *resource.get();}
-		operator resource_ptr()      const noexcept    {return  resource;}
-		resource_ptr release()             noexcept    {return std::move(resource);}
+		nearest_resource_ref(topic_view         topic)    : shared_ptr(find_nearest_resource(topic)) {}
+		nearest_resource_ref(const std::string& topic)    : shared_ptr(find_nearest_resource(topic)) {}
+		nearest_resource_ref(std::string_view   topic)    : shared_ptr(find_nearest_resource(topic)) {}
+		nearest_resource_ref(const char*        topic)    : shared_ptr(find_nearest_resource(topic)) {}
 	};
 
+
+
+	namespace detail
+	{
+		template<typename Base>
+		class topic_exception : public Base
+		{
+		public:
+			topic_exception(std::string_view preamble, const std::string& topic)    : Base(preamble.data() + (": " + topic)) {}
+			topic_exception(std::string_view preamble, topic_view topic)            : topic_exception(preamble, topic.string) {}
+			topic_exception(std::string_view preamble, std::string_view topic)      : topic_exception(preamble, std::string(topic)) {}
+			topic_exception(std::string_view preamble, const char* topic)           : topic_exception(preamble, std::string(topic)) {}
+		};
+		using topic_runtime_error = topic_exception<std::runtime_error>;
+		using topic_logic_error = topic_exception<std::logic_error>;
+	}
 
 
 	/*
-		Exception thrown when a topic does not exist.
+		Exception thrown when no resource exists for a given topic.
 	*/
-	class no_such_topic : public std::runtime_error
+	class no_such_topic : public detail::topic_runtime_error
 	{
 	public:
-		no_such_topic(std::string_view preamble, std::string_view topic)
-			:
-			runtime_error(std::string(preamble) + ": " + std::string(topic)) {}
-
-		no_such_topic(std::string_view preamble, topic_view topic)
-			:
-			no_such_topic(preamble, topic.string) {}
-	};
-
-
-	/*
-		Exception thrown when a function
-	*/
-	class incompatible_type : public std::logic_error
-	{
-	public:
-		incompatible_type(std::string_view preamble, const std::string& topic)    : logic_error(preamble.data() + (": " + topic)) {}
-		incompatible_type(std::string_view preamble, topic_view topic)            : incompatible_type(preamble, topic.string) {}
-		incompatible_type(std::string_view preamble, std::string_view topic)      : incompatible_type(preamble, std::string(topic)) {}
-		incompatible_type(std::string_view preamble, const char* topic)           : incompatible_type(preamble, std::string(topic)) {}
+		using detail::topic_runtime_error::topic_runtime_error;
 	};
 }

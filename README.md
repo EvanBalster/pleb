@@ -1,33 +1,56 @@
 # PLEB (Process-Local Event Bus)
 ⚠ This library is in early development.  The API is subject to change.
 
-PLEB is a header-only C++ library for implementing tiny multi-threaded microservices under hard real-time constraints.  It does not include any protocols for communicating between processes or machines, but is designed to integrate with protocols like HTTP, pub/sub and message bus technologies.
+PLEB is a header-only C++17 library that provides a **resource tree** for microservices within a process.  It is multi-threaded and (mostly*) wait-free, meaning it can be used for highly time-sensitive concurrent applications.  The resource tree is (usually) global and indexed by names similar to file paths.  PLEB does not include any protocols for communicating with other processes or machines.  Instead, it is designed to act as an interface between application code and external communications.
 
-PLEB's basic features include:
+Resources allow us to **publish** events to any number of subscribers, to make a **request** to a single service, or both.  These communications are are realized as function calls.  While PLEB is thread-safe for purposes of setting up and making these calls, it imposes no locks or message queueing — instead, the application is expected to impose its own concurrency measures.
 
-* Multiple communication patterns
-  * Request-reply
-    * Asynchronous, synchronous and one-way "push"
-  * Publish-subscribe
-    * May be used to implement surveyor patterns
-* "Bring your own" concurrency
-  * PLEB itself is thread-safe and wait-free
-    * (topic tree is lockful pending the completion of a suitable hashtable)
-  * Requests and Events involve no intrinsic locks, queues or buffering
-* On-demand type conversion (planned)
+(* PLEB's resource tree uses locking operations when adding resources or looking them up, pending the integration of a suitable wait-free hash table algorithm,)
 
 
+
+## Quick  Examples
+
+```C++
+#include <pleb.h>
+
+class MyService
+{
+public:
+    std::shared_ptr<pleb::service> pleb_service;
+    
+    void handshake(pleb::request &request) {request.reply("Howdy");}
+}
+
+void main()
+{
+    auto service = std::make_shared<MyService>();
+    service->pleb_service = pleb::serve(
+        "/service/handshake",
+		service, &MyService::handshake);
+    
+    pleb::reply reply = pleb::request("/service/handshake");
+}
+```
+
+
+
+## Smart Pointers
+
+PLEB uses C++11's `shared_ptr` and `weak_ptr` to solve the most common thread safety issue with inter-thread function calls:  the 
+
+Normally, `shared_ptr` and `weak_ptr` require the indicated object to be allocated on the heap.  This can be inconvenient when an object would otherwise exist on the stack or as a member of another object.  For this reason, we provide a utility called `life_lock` which allows *any* object to generate weak pointers to itself, and which only blocks if these have been locked as `shared_ptr` when the object is destroyed.
 
 
 ## A Native Event Bus
 
 PLEB can be used for intra-process communications similar to a message queue framework, but with essential differences that leverage the advantages of communicating within a local process:
 
-* Events may exchange native objects, in addition to raw binary data.
+* Events may exchange any native object, not just binary data.
   * This can avoid unnecessary serialization and deserialization.
   * This allows for RAII, reference counting, synchronization mechanisms and more.
 * Events are handled by calling functors.
-  * This allows for queueless operation and instant fulfillment of certain requests.
+  * This allows for queue-free operation and immediate fulfillment of certain requests.
   * This allows exceptions to be thrown directly or via futures.
 * Event handling is completely reliable as long as the origin and destination exist.
   * In many cases, this alleviates the need for loss-tolerance or idempotence.
@@ -41,9 +64,9 @@ In this sense, PLEB can be framed as an event bus API which removes implementati
 
 PLEB facilitates two primary messaging patterns:  a `request` to a single service or an `event` for any number of subscribers.  Values passed to receivers are wrapped in `std::any`.  Receivers will typically support a limited set of value types, treating unsupported types as an error.
 
-Requests and event handlers are realized by direct calls to bound`std::function` wrappers.  PLEB itself provides no intrinsic thread safety in passing events and requests; instead, it is expected that these mechanisms will be built into the registered functions themselves.  Replies to requests may be fulfilled using `std::future`, which is thread-safe.
+Requests and event handlers are realized by direct calls to bound `std::function` wrappers.  PLEB itself provides no intrinsic thread safety in passing events and requests; instead, it is expected that these mechanisms will be built into the registered functions themselves.  Replies to requests may be fulfilled using `std::future`, which is thread-safe.
 
-
+Network microservice libraries often include additional communication patterns.  Because PLEB works within a single process, "PAIR" and "PUSH_PULL" topologies can be implemented with PLEB's requests, while SURVEYOR and STAR topologies can be implemented with PLEB's event publishing mechanism.
 
 A surveyor-respondent pattern may be implemented by publishing an object capable of collecting responses.
 

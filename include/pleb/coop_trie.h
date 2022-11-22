@@ -62,7 +62,7 @@ namespace coop
 		/*
 			Access the parent node.
 		*/
-		const std::shared_ptr<trie_> &parent() noexcept    {return _parent;}
+		const std::shared_ptr<trie_> &parent() const noexcept    {return _parent;}
 
 
 		/*

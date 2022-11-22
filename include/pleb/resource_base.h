@@ -1,8 +1,8 @@
 #pragma once
 
+#include <deque>
 
 #include "pleb_base.h"
-#include "conversion.h"
 
 #include "request.h"
 #include "event.h"
@@ -13,16 +13,18 @@ namespace coop {template<class T> class trie_;}
 /*
 	Base class for topic trie.
 */
+
 namespace pleb
 {
 	/*
-		Represents the internal data of a resource.
+		Represents the internal, protected data of a resource.
 	*/
 	class resource_data :
 		public std::enable_shared_from_this<resource_data>
 	{
 	public:
 		using service_slot = coop::unmanaged::slot<service>;
+
 		using subscriber_list = coop::unmanaged::pool<subscription>;
 		using subscriber_iterator = typename subscriber_list::iterator;
 

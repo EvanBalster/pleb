@@ -1,8 +1,9 @@
 #pragma once
 
 
-#include "pleb_base.h"
-#include "conversion.h"
+#include "coop_trie.h"
+
+#include "request.h"
 #include "event.h"
 
 #include "resource_base.h"
@@ -19,7 +20,7 @@
 
 	These classes do not provide asynchronous execution or serialization;
 		those features can be implemented as part of the function wrapper.
-		Subscribers throwing an exception will halt processing of a report.
+		Subscribers throwing an exception will halt processing of an event.
 
 	TEARDOWN SAFETY NOTICE:
 		Calls may be in progress when the subscription is released.
@@ -38,8 +39,8 @@ namespace pleb
 	protected:
 		using _trie = coop::trie_<resource_data>;
 
-		resource(resource_ptr parent, std::string_view id)              : _trie(id, std::shared_ptr<_trie>(parent, (_trie*) &*parent)) {}
-		static resource_ptr _asTopic(std::shared_ptr<_trie> p)          {return std::shared_ptr<resource>(p, (resource*) &*p);}
+		resource(resource_ptr parent, std::string_view id)       : _trie(id, std::shared_ptr<_trie>(parent, (_trie*) &*parent)) {}
+		static resource_ptr _asTopic(std::shared_ptr<_trie> p)   {return resource_ptr(p, (resource*) &*p);}
 
 
 	public:
@@ -58,7 +59,7 @@ namespace pleb
 		~resource() {}
 
 		// Access the parent resource (root's parent is null)
-		resource_ptr parent() noexcept                        {return _asTopic(_trie::parent());}
+		resource_ptr parent() const noexcept                   {return _asTopic(_trie::parent());}
 
 		// Access a subtopic of this resource.
 		resource_ptr subtopic(topic_view subtopic)             {return _asTopic(_trie::get    (subtopic));}
@@ -85,16 +86,25 @@ namespace pleb
 				and the parents/ancestors of the resource.
 		*/
 		template<typename T = std_any::any>
-		void publish(topic_view subtopic, status status = statuses::OK, T &&item = {})    {this->nearest(subtopic)->publish(status, std::forward<T>(item));}
+		void publish(
+			status           status    = statuses::OK,
+			T              &&item      = {},
+			flags::filtering filtering = flags::default_message_filtering,
+			flags::handling  handling  = flags::no_special_handling)
+		{
+			pleb::event e(shared_from_this(), status, std::forward<T>(item), filtering, handling);
+			publish(e);
+		}
 
 		template<typename T = std_any::any>
-		void publish(                     status status = statuses::OK, T &&item = {})
+		void publish(
+			topic_view       subtopic,
+			status           status    = statuses::OK,
+			T              &&item      = {},
+			flags::filtering filtering = flags::default_message_filtering,
+			flags::handling  handling  = flags::no_special_handling)
 		{
-			event event = {shared_from_this(), status, std::forward<T>(item)};
-
-			for (resource_ptr node = shared_from_this(); node; node = node->parent())
-				for (subscription &sub : (_trie::coop_type&) *node)
-					sub.func(event);
+			this->nearest(subtopic)->publish(status, std::forward<T>(item), filtering, handling);
 		}
 
 
@@ -108,64 +118,117 @@ namespace pleb
 
 
 		/*
-			REQUEST something from this resource.
-				A reply may be provided asynchronously by the registered service.
-				If there is no service, pleb::errors::no_such_service is thrown.
+			REQUEST something from this resource, providing a client for responding.
+				client_ref may be a client_ptr or a std::future.
+				The response target will receive a response, now or later.
+				If there is no service, pleb::service_not_found is thrown.
 		*/
-		template<typename T = std_any::any> [[nodiscard]]
-		std::future<reply> request(method method, T &&item = {})    {std::future<reply> r; pleb::request(shared_from_this(), method, std::forward<T>(item), &r); return std::move(r);}
+		template<class V = std::any>
+		void request(client_ref client, method method, V &&value = {})
+		{
+			pleb::request r(std::move(client), shared_from_this(), method, std::forward<V>(value));
+			issue(r);
+		}
 
-		[[nodiscard]]                   std::future<reply> request       ()         {return request(method::GET);}
-		[[nodiscard]]                   std::future<reply> request_get   ()         {return request(method::GET);}
-		template<class T> [[nodiscard]] std::future<reply> request_put   (T &&v)    {return request(method::PUT, std::forward<T>(v));}
-		template<class T> [[nodiscard]] std::future<reply> request_post  (T &&v)    {return request(method::POST, std::forward<T>(v));}
-		template<class T> [[nodiscard]] std::future<reply> request_patch (T &&v)    {return request(method::PATCH, std::forward<T>(v));}
-		[[nodiscard]]                   std::future<reply> request_delete()         {return request(method::DELETE);}
+		/* */                        void GET   (client_ref c)                    {return request(c, method::GET);}
+		template<class V = std::any> void PUT   (client_ref c, V &&value)         {return request(c, method::PUT,    std::forward<V>(value));}
+		template<class V = std::any> void POST  (client_ref c, V &&value = {})    {return request(c, method::POST,   std::forward<V>(value));}
+		template<class V = std::any> void PATCH (client_ref c, V &&value)         {return request(c, method::PATCH,  std::forward<V>(value));}
+		/* */                        void DELETE(client_ref c)                    {return request(c, method::DELETE);}
 
 		/*
-			REQUEST something from this resource.
-				A reply will be provided synchronously by the registered service.
-				This may require the current thread to block until the reply is available.
-				If there is no service, pleb::errors::no_such_service is thrown.
+			Convenience API for requests.
+
+			The returned request may be issued (sent) by:
+			- calling async<T> or converting to std::future<T>
+			- calling await<T>
+			- calling push() or issue(client) -- auto_retrieve only.
 		*/
-		template<typename T = std_any::any> [[nodiscard]]
-		reply sync_request(method method, T &&item = {})    {return request(method, std::move(item)).get();}
+		template<class V = std::any>
+		auto_request request(method method, V &&value = {})
+		{
+			return auto_request(shared_from_this(), method, std::forward<V>(value));
+		}
+		template<class V = std::any>
+		auto_retrieve retrieve(method method, V &&value = {})
+		{
+			return auto_retrieve(shared_from_this(), method, std::forward<V>(value));
+		}
 
-		[[nodiscard]]                   reply sync_get   ()         {return sync_request(method::GET);}
-		template<class T> [[nodiscard]] reply sync_put   (T &&v)    {return sync_request(method::PUT, std::forward<T>(v));}
-		template<class T> [[nodiscard]] reply sync_post  (T &&v)    {return sync_request(method::POST, std::forward<T>(v));}
-		template<class T> [[nodiscard]] reply sync_patch (T &&v)    {return sync_request(method::PATCH, std::forward<T>(v));}
-		[[nodiscard]]                   reply sync_delete()         {return sync_request(method::DELETE);}
+		/* */                        auto_retrieve GET  ()                  {return retrieve(method::GET);}
+		template<class V = std::any> auto_request PUT   (V &&value)         {return request(method::PUT,   std::forward<V>(value));}
+		template<class V = std::any> auto_request POST  (V &&value = {})    {return request(method::POST,  std::forward<V>(value));}
+		template<class V = std::any> auto_request PATCH (V &&value)         {return request(method::PATCH, std::forward<V>(value));}
+		/* */                        auto_request DELETE()                  {return request(method::DELETE);}
 
+#if 0
 		/*
-			PUSH data or commands to a resource.
-				The request will be routed to the registered service.
+			PUSH a request to a resource.
 				There is no mechanism for a direct reply (this may improve performance).
-				If there is no service, pleb::errors::no_such_service is thrown.
+				If there is no service, pleb::service_not_found is thrown.
 		*/
-		template<typename T = std_any::any>
-		void push(method method, T &&item = {})    {pleb::request r(shared_from_this(), method, item, nullptr);}
+		template<class V = std::any>
+		void push(method method, V &&value = {})
+		{
+			request(nullptr, method, std::forward<V>(value));
+		}
 
-		template<class T> void push/*PUT*/(T &&v)    {push(method::PUT, std::forward<T>(v));}
-		template<class T> void push_put   (T &&v)    {push(method::PUT, std::forward<T>(v));}
-		template<class T> void push_post  (T &&v)    {push(method::POST, std::forward<T>(v));}
-		template<class T> void push_patch (T &&v)    {push(method::PATCH, std::forward<T>(v));}
-		void                   push_delete()         {push(method::DELETE);}
+		template<class V = std::any> void push_PUT   (V &&value)         {push(method::PUT,   std::forward<V>(value));}
+		template<class V = std::any> void push_POST  (V &&value = {})    {push(method::POST,  std::forward<V>(value));}
+		template<class V = std::any> void push_PATCH (V &&value)         {push(method::PATCH, std::forward<V>(value));}
+		/* */                        void push_DELETE()                  {push(method::DELETE);}
+#endif
 
 
 		/*
 			REQUEST using a prepared pleb::request object.
 				pleb::request usually calls this method upon construction;
-				it can be used to p rocess the same request repeatedly.
+				it can be used to issue the same request repeatedly.
 		*/
-		void process(pleb::request &request)
+		void issue(pleb::request &msg) const
 		{
-			if (auto svc = _trie::service_lock())
-			{
-				svc->func(request);
-				// TODO fill the reply if the service failed to do so
-			}
-			else throw errors::no_such_service(topic());
+			msg.features &= ~flags::did_respond;
+
+			auto svc = _trie::service_lock();
+			if (svc)
+				if (svc->accepts(msg.filtering & ~flags::recursive))
+					goto service_found;
+			
+			if (msg.recursive()) // Propagate up the chain.
+				for (resource_ptr node = parent(); node; node = node->parent())
+					if (svc = _trie::service_lock())
+						if (svc->accepts(msg.filtering | flags::recursive))
+							goto service_found;
+
+		//service_not_found:
+			throw service_not_found("No service available", topic());
+			return;
+
+		service_found:
+			svc->func(msg);
+
+			// Default response if service did not respond or move message.
+			if (!(msg.features & flags::did_respond))
+				msg.respond(statuses::NoContent);
+		}
+
+		/*
+			PUBLISH using a prepared pleb::event object.
+				pleb::event usually calls this method upon construction;
+				it can be used to publish the same event repeatedly.
+		*/
+		void publish(const pleb::event &msg) const
+		{
+			// Publish to this resource's direct subscribers.
+			for (subscription &sub : *this)
+				if (sub.accepts(msg.filtering & ~flags::recursive))
+					sub.func(msg);
+
+			if (msg.recursive()) // Propagate up the chain.
+				for (resource_ptr node = parent(); node; node = node->parent())
+					for (subscription &sub : *node)
+						if (sub.accepts(msg.filtering | flags::recursive))
+							sub.func(msg);
 		}
 
 
@@ -180,10 +243,10 @@ namespace pleb
 
 			Fails, returning false, if the child ID is already in use.
 		*/
-		resource_ptr make_alias(std::string_view child_id, target_resource destination)
+		resource_ptr make_alias(std::string_view child_id, resource_ref destination)
 		{
-			if (destination.resource && this->make_link(child_id, std::shared_ptr<_trie>(destination.resource, (_trie*) destination.resource.get())))
-				return std::move(destination.resource);
+			if (destination && this->make_link(child_id, std::shared_ptr<_trie>(destination, (_trie*) destination.get())))
+				return std::move(destination);
 			return nullptr;
 		}
 
@@ -194,15 +257,38 @@ namespace pleb
 	};
 }
 
+/*
+	==============
+	IMPLEMENTATION
+	==============
+*/
+
 inline pleb::resource_ptr pleb::operator/(const resource_ptr &ptr, topic_view subtopic)    {return ptr->subtopic(subtopic);}
 
 inline pleb::resource_ptr pleb::find_nearest_resource(pleb::topic_view topic)    {return pleb::resource::find_nearest(topic);}
 inline pleb::resource_ptr pleb::find_resource        (pleb::topic_view topic)    {return pleb::resource::find(topic);}
 
-// Perform a manual request to the given path.
-template<typename T>
-inline pleb::request::request(topic_view path, pleb::method method, T &&value, std::future<pleb::reply> *reply, bool process_now) :
-	request(pleb::resource::find(path), method, std::move(value), reply, process_now) {}
-
 // Process a request.
-inline void pleb::request::process()    {resource->process(*this);}
+inline void pleb::request::issue  ()    {resource->issue  (*this); features = features|flags::did_send;}
+inline void pleb::event  ::publish()    {resource->publish(*this); features = features|flags::did_send;}
+
+inline pleb::service::service(resource_ptr _resource, service_function &&_func)
+	:
+	receiver(flags::default_service_ignore), resource(std::move(_resource)),
+	func(std::move(_func))
+{
+	resource->publish(statuses::Created, this,
+		flags::service_status      | flags::recursive);
+}
+
+inline pleb::subscription::subscription(resource_ptr _resource, subscriber_function &&_func)
+	:
+	receiver(flags::default_subscriber_ignore), resource(std::move(_resource)),
+	func(std::move(_func))
+{
+	resource->publish(statuses::Created, this,
+		flags::subscription_status | flags::recursive);
+}
+
+inline pleb::service     ::~service()         {resource->publish(statuses::Gone, this, flags::service_status      | flags::recursive);}
+inline pleb::subscription::~subscription()    {resource->publish(statuses::Gone, this, flags::subscription_status | flags::recursive);}

@@ -1,36 +1,31 @@
 #pragma once
 
-
 #include <future>
 #include <exception>
-#include "pleb_base.h"
-#include "method.h"
-#include "status.h"
 
+#include "response.h"
+#include "method.h"
 
 /*
-	PLEB delivers requests to services, which may then reply
-		according to the method of requesting.
-		See resource.h for more functionality.
+	PLEB delivers requests to services, which may then respond
+		by way of a future or callback function.
+		Response mechanisms are defined in <response.h>.
+	
+	See <resource.h> for more functionality.
 */
 
 
 namespace pleb
 {
-	namespace errors
+	/*
+		Exception thrown when no service can handle a request.
+	*/
+	class service_not_found : public detail::topic_runtime_error
 	{
-		class no_such_service : public std::runtime_error
-		{
-		public:
-			no_such_service(const std::string& topic)    : runtime_error("no such service: " + topic) {}
-			no_such_service(topic_view topic)            : no_such_service(topic.string) {}
-			no_such_service(std::string_view topic)      : no_such_service(std::string(topic)) {}
-			no_such_service(const char* topic)           : no_such_service(std::string(topic)) {}
+	public:
+		using detail::topic_runtime_error::topic_runtime_error;
+	};
 
-		private:
-			std::string _str;
-		};
-	}
 
 	/*
 		Services are retained by a shared_ptr throughout their lifetimes.
@@ -38,121 +33,218 @@ namespace pleb
 	class service;
 	using service_ptr  = std::shared_ptr<service>;
 
+
 	/*
-		Replies may be produced in response to a request (see below)
+		A request is a message directed to a single service.
+			It may optionally provide a method to send a respond.
 	*/
-	class reply
+	class request : public message
 	{
 	public:
-		status       status;
-		std_any::any value;
-	};
+		using content::value;
+		using content::value_cast;
+		using content::get;
+		using content::get_mutable;
 
 
-	class request
-	{
-	public:
-		const resource_ptr resource;
-		const method       method;
-		std_any::any       value;
-		
 	private:
-		using promise_t = std::promise<pleb::reply>;
-		using future_t = std::future<pleb::reply>;
-		std::future<pleb::reply> *_reply;
+		client_ptr _client;
+
 
 	public:
-		// Compose a request manually.
-		template<typename T>
+		/*
+			Compose a request manually.
+				If a client is supplied, the request will occur immediately.
+		*/
+		template<typename T = std::any>
 		request(
-			resource_ptr             _resource,
-			pleb::method             _method,
-			T                      &&_value,
-			std::future<pleb::reply> *reply       = nullptr,
-			bool                      process_now = true)
+			client_ref       client,
+			resource_ref     target,
+			pleb::method     method,
+			T              &&value     = {},
+			flags::filtering filtering = flags::default_message_filtering,
+			flags::handling  handling  = flags::no_special_handling)
 			:
-			resource(std::move(_resource)), method(_method), value(std::forward<T>(_value)), _reply(reply)
-				{if (process_now) process();}
-
-		// Make a request to the given topic with method and value.  (defined in resource.h)
-		template<typename T>
-		request(topic_view topic, pleb::method method, T &&value, std::future<reply> *reply = nullptr, bool process_now = true);
+			message(std::move(target), code_t(method.code),
+				std::forward<T>(value), filtering, handling),
+			_client(client)
+			{}
 
 
-		// Process this request.  This may be done repeatedly.
-		//    This function is defined in resource.h
-		void process();
+		~request() noexcept    {}
 
 
-		// Syntactic sugar:  Allow for  std::future<reply> reply = pleb::request(...)
-		operator std::future<pleb::reply>() const    {return _reply ? std::move(*_reply) : std::future<pleb::reply>();}
+		// Request method from <method.h>.  Stored in the code field.
+		method method() const noexcept    {return pleb::method_enum(code);}
 
-
-		// Access value as a specific type.  Only succeeds if the type is an exact match.
-		template<class T> const T *value_cast() const noexcept    {return std_any::any_cast<T>(&value);}
-		template<class T> T       *value_cast()       noexcept    {return std_any::any_cast<T>(&value);}
-
-		// Get a constant pointer to the value.
-		//  This method automatically deals with indirect values.
-		template<class T> const T *get() const noexcept    {return pleb::any_const_ptr<T>(value);}
-
-		// Access a mutable pointer to the value.
-		//  This method automatically deals with indirect values.
-		//  This will fail when a const request holds a value directly.
-		template<class T> T       *get_mutable() const noexcept    {return pleb::any_ptr<T>(value);}
-		template<class T> T       *get_mutable()       noexcept    {return pleb::any_ptr<T>(value);}
 
 		/*
-			Post an immediate reply.
+			Issue this request without accepting any response.
+				This is more lightweight than a respondable request.
+		*/
+		void push()                                     {issue(nullptr);}
+
+		/*
+			Issue this request and deliver the reply through std::future.
+		*/
+		template<typename Response = pleb::response>
+		std::future<Response> async()                   {std::future<Response> f; issue(std::make_shared<client_promise<Response>>(&f)); return f;}
+
+		/*
+			Issue this request and return the response.
+				This may block if the service doesn't respond immediately.
+		*/
+		template<typename Response = pleb::response>
+		Response await()                                {return async<Response>().get();} // TODO elide std::future for immediate services
+
+
+		// Issue this request to its targeted resource.
+		//    Normally this happens automatically when constructing request.
+		//    This may be done repeatedly.
+		//    This function is defined in resource.h
+		void issue(client_ref client)    {_client = std::move(client); issue();}
+
+		void issue();
+
+
+
+		/*
+			Respond to the request.
+				This is usually called by the receiving service.
 		*/
 		template<class T = std_any::any>
-		void reply(status status, T &&value = {}) const
+		void respond(status status, T &&value = {})
 		{
-			if (!_reply) return;
-			promise_t p; p.set_value(pleb::reply{status, std::move(value)});
-			*_reply = p.get_future();
+			features = features | flags::did_respond;
+			if (_client) _client->respond(resource, status, std::move(value));
 		}
-
-		/*
-			Promise a later reply.
-		*/
-		std::promise<pleb::reply> promise()                               const    {promise_t p; promise(p.get_future()); return std::move(p);}
-		void                      promise(std::future<pleb::reply> reply) const    {if (_reply) *_reply = std::move(reply);}
 
 
 		/*
 			Convenience methods for replying with common statuses.
 		*/
-#define REPLY_SHORTHAND(MethodName, Status)    template<class T = std_any::any> void MethodName(T &&value = {}) {reply(Status, std::forward<T>(value));}
+#define REPLY_SHORTHAND(MethodName, Status)    template<class T = std_any::any> void MethodName(T &&value = {}) {respond(Status, std::forward<T>(value));}
 
-		REPLY_SHORTHAND( reply_OK,                   statuses::OK )
-		REPLY_SHORTHAND( reply_Created,              statuses::Created )
+		REPLY_SHORTHAND( respond_OK,                   statuses::OK )
+		REPLY_SHORTHAND( respond_Created,              statuses::Created )
 
-		REPLY_SHORTHAND( reply_NotFound,             statuses::NotFound )
-		REPLY_SHORTHAND( reply_MethodNotAllowed,     statuses::MethodNotAllowed )
-		REPLY_SHORTHAND( reply_Gone,                 statuses::Gone )
-		REPLY_SHORTHAND( reply_UnsupportedMediaType, statuses::UnsupportedMediaType )
+		REPLY_SHORTHAND( respond_NotFound,             statuses::NotFound )
+		REPLY_SHORTHAND( respond_MethodNotAllowed,     statuses::MethodNotAllowed )
+		REPLY_SHORTHAND( respond_Gone,                 statuses::Gone )
+		REPLY_SHORTHAND( respond_UnsupportedMediaType, statuses::UnsupportedMediaType )
 
-		REPLY_SHORTHAND( reply_InternalServerError,  statuses::InternalServerError )
-		REPLY_SHORTHAND( reply_NotImplemented,       statuses::NotImplemented )
+		REPLY_SHORTHAND( respond_InternalServerError,  statuses::InternalServerError )
+		REPLY_SHORTHAND( respond_NotImplemented,       statuses::NotImplemented )
 	};
 
 	
-
+	/*
+		Services are implemented as a function taking a request.
+	*/
 	using service_function = std::function<void(request&)>;
 
 
 	/*
 		Class for a registered service function which can fulfill requests.
 	*/
-	class service
+	class service : public receiver
 	{
 	public:
-		service(std::shared_ptr<resource> _resource, service_function &&_func)
-			:
-			resource(std::move(_resource)), func(std::move(_func)) {}
+		const resource_ptr resource;
 
-		const std::shared_ptr<resource> resource;
-		const service_function          func;
+	private:
+		friend class resource;
+		const service_function func;
+
+
+	public:
+		service(resource_ptr _resource, service_function &&_func);
+		~service();
+	};
+
+
+
+	/*
+		A request, returned from some function, which automatically
+			dispatches itself based on how it is handled by the caller.
+	*/
+	class auto_request : public request
+	{
+	public:
+		/*
+			auto_request is constructed without a client reference.
+		*/
+		template<typename T = std::any>
+		auto_request(
+			resource_ref   target,
+			pleb::method   method,
+			T            &&value = {})
+			:
+			request(nullptr, std::move(target), method, std::forward<T>(value)) {}
+
+		/*
+			1: if auto_request is discarded without being issued,
+				the request will be pushed (no way to respond).
+
+			eg:  pleb::DELETE("/resource/1");
+		*/
+		~auto_request() noexcept(false)
+		{
+			// auto_request will not fire if destroyed as a result of stack unwinding.
+#if __cplusplus >= 201700 || __MSVC_LANG >= 201700
+			if (std::uncaught_exceptions()) return;
+#else
+			if (std::uncaught_exception()) return;
+#endif
+			if (!(features & flags::did_send))
+			{
+				this->push();
+			}
+		}
+
+		/*
+			2: auto_request may be converted into a std::future.
+
+			eg:  std::future<response> result = pleb::GET("/resource/1");
+
+			When using types other than pleb::response, status is discarded
+			and a response of incompatible type will throw std::bad_any_cast.
+		*/
+		template<typename Response>
+		operator std::future<Response>()    {return this->async<Response>();}
+
+		/*
+			3: a request may be explicitly converted to some other type.
+				This results in a call to await<T>, which may block.
+
+			eg:  auto resultText = std::string(pleb::POST("/resource/1", ""));
+			
+			When using types other than pleb::response, status is discarded
+			and a response of incompatible type will throw std::bad_any_cast.
+		*/
+		template<typename T>
+		explicit operator T()    {return this->await<T>();}
+
+		operator response()    {return this->await<response>();}
+
+		/*
+			4: messages may be sent by calling push(), async<T> or await<T> on this object.
+		*/
+	};
+
+	/*
+		Variant of auto_request for GET and other side-effect-free methods.
+			Throws a compile-time warning if the response is not captured.
+			Requests will not be pushed to the service if this happens.
+	*/
+	class [[nodiscard]] auto_retrieve : public auto_request
+	{
+	public:
+		using auto_request::auto_request;
+
+		~auto_retrieve()
+		{
+			features |= flags::did_send;
+		}
 	};
 }

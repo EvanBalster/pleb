@@ -1,10 +1,7 @@
 #pragma once
 
-
-#include "pleb_base.h"
-#include "conversion.h"
+#include "message.h"
 #include "status.h"
-
 
 /*
 	PLEB facilitates publishing events to topics,
@@ -24,43 +21,60 @@ namespace pleb
 	/*
 		Reports are events or messages passed from publishers to subscribers.
 	*/
-	class event
+	class event : public message
 	{
 	public:
-		const resource_ptr resource;
-		const pleb::status status; // Conventionally set to an HTTP status code, or zero.
-		std_any::any       value;
+		using content::value;
+		using content::value_cast;
+		using content::get;
+		using content::get_mutable;
+		
 
 	public:
-		// Access value as a specific type.  Only succeeds if the type is an exact match.
-		template<class T> const T *value_cast() const noexcept    {return std_any::any_cast<T>(&value);}
-		template<class T> T       *value_cast()       noexcept    {return std_any::any_cast<T>(&value);}
+		template<typename T = std::any>
+		event(
+			nearest_resource_ref destination,
+			pleb::status         status,
+			T                  &&value     = {},
+			flags::filtering     filtering = flags::default_message_filtering,
+			flags::handling      handling  = flags::no_special_handling)
+			:
+			message(std::move(destination), code_t(status.code),
+				std::forward<T>(value), filtering, handling)
+			{}
 
-		// Get a constant pointer to the value.
-		//  This method automatically deals with indirect values.
-		template<class T> const T *get() const noexcept    {return pleb::any_const_ptr<T>(value);}
 
-		// Access a mutable pointer to the value.
-		//  This method automatically deals with indirect values.
-		//  This will fail when a const event holds a value directly.
-		template<class T> T       *get_mutable() const noexcept    {return pleb::any_ptr<T>(value);}
-		template<class T> T       *get_mutable()       noexcept    {return pleb::any_ptr<T>(value);}
+		// Event status from <status.h>.  Stored in the code field.
+		status status() const noexcept    {return pleb::status_enum(code);}
+
+
+		// Publish this event.  This may be done repeatedly.
+		//    This function is defined in resource.h
+		void publish();
 	};
 
+
+	/*
+		Subscribers are implemented as a function taking an event.
+	*/
 	using subscriber_function = std::function<void(const event&)>;
 
 
 	/*
 		Class for a registered subscription function which can receive reports.
 	*/
-	class subscription
+	class subscription : public receiver
 	{
 	public:
-		subscription(std::shared_ptr<resource> _resource, subscriber_function &&_func)
-			:
-			resource(std::move(_resource)), func(std::move(_func)) {}
+		const resource_ptr resource;
 
-		const std::shared_ptr<resource> resource;
-		const subscriber_function       func;
+	private:
+		friend class resource;
+		const subscriber_function func;
+
+
+	public:
+		subscription(resource_ptr _resource, subscriber_function &&_func);
+		~subscription();
 	};
 }
