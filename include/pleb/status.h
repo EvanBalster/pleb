@@ -2,6 +2,7 @@
 
 #include <iosfwd>
 #include <string>
+#include <exception>
 #include "util/HttpStatusCodes_C++11.h"
 
 
@@ -84,6 +85,23 @@ namespace pleb
 			+  10 * int(s[1]-'0')
 			+ 100 * int(s[0]-'0'));
 	}
+
+
+	/*
+		Throwing this exception from a request handler will
+			generate a response with the given status.
+	*/
+	class status_exception : public std::exception
+	{
+	public:
+		status status;
+
+	public:
+		status_exception(pleb::status _status)    : status(_status) {}
+		~status_exception() override              {}
+
+		const char *what() const noexcept         {return status.reasonPhrase().data();}
+	};
 }
 
 template<class CharT, class Traits>

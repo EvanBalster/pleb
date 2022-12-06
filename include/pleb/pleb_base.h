@@ -3,6 +3,8 @@
 #include <string_view>
 #include <functional>
 
+#include "conversion.h"
+
 namespace pleb
 {
 #define PLEB_ND [[nodiscard]] inline
@@ -142,4 +144,15 @@ namespace pleb
 	public:
 		using detail::topic_runtime_error::topic_runtime_error;
 	};
+
+
+	namespace detail
+	{
+		// For now, we use a global conversion table.
+		inline const std::shared_ptr<conversion_table> &global_conversion_table()
+		{
+			static auto t = std::make_shared<conversion_table>();
+			return t;
+		}
+	}
 }

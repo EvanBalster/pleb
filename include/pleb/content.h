@@ -85,7 +85,7 @@ namespace pleb
 
 
 		// Attempt to move the contained value.  Throws any_cast on failure.
-		template<class T> T        move_as()           noexcept    {return std::any_cast<T>(std::move(r._value))}
+		template<class T> T        move_as()                       {return std::any_cast<T>(std::move(_value));}
 
 
 		// Access value as a specific type.  Only succeeds if the type is an exact match.

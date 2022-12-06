@@ -55,7 +55,7 @@ namespace coop
 			Get this trie's identifier or complete path.
 				The path is a list of ancestors, not including the root.
 		*/
-		std::string_view id  ()                     const noexcept    {return _id;}
+		const std::string &id  ()                     const noexcept    {return _id;}
 		std::string      path(char separator = '/') const             {std::string s; _path(s,separator); return s;}
 
 
@@ -151,9 +151,9 @@ namespace coop
 		}
 
 	private:
-		const std::string         _id;
-		std::shared_ptr<trie_>    _parent;
-		locking_weak_table<trie_> _children; // Hope to replace with atomic table later
+		const std::string                      _id;
+		std::shared_ptr<trie_>                 _parent;
+		locking_weak_table<std::string, trie_> _children; // Hope to replace with atomic table later
 	};
 
 

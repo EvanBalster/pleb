@@ -1,7 +1,9 @@
 # PLEB (Process-Local Event Bus)
 ⚠ This library is in early development.  The API is subject to change.
 
-PLEB is a header-only C++17 library that provides a **resource tree** for microservices within a process.  It is multi-threaded and (mostly*) wait-free, meaning it can be used for highly time-sensitive concurrent applications.  The resource tree is (usually) global and indexed by names similar to file paths.  PLEB does not include any protocols for communicating with other processes or machines.  Instead, it is designed to act as an interface between application code and external communications.
+PLEB is a header-only C++17 library that provides a **resource tree** for microservices within a process.  Resources are used to handle request-reply and publish-subscribe communication patterns, similar to web services, but
+
+PLEB is multi-threaded and (mostly*) wait-free, meaning it can be used for highly time-sensitive concurrent applications.  The resource tree is (usually) global and indexed by names similar to file paths.  PLEB does not include any protocols for communicating with other processes or machines.  Instead, it is designed to act as an interface between application code and external communications.
 
 Resources allow us to **publish** events to any number of subscribers, to make a **request** to a single service, or both.  These communications are are realized as function calls.  While PLEB is thread-safe for purposes of setting up and making these calls, it imposes no locks or message queueing — instead, the application is expected to impose its own concurrency measures.
 

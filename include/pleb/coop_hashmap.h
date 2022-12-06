@@ -38,7 +38,13 @@ namespace coop
 			using bookmark_t = typename list_t::bookmark_node;
 			using iterator = typename list_t::iterator;
 
+
 			static const size_t HASH_BITS = sizeof(hash_type)*8;
+
+			constexpr static size_t _tierBits (size_t tier)    {return 4+2*tier;}
+			constexpr static size_t _tierSize (size_t tier)    {return 1<<_tierBits(tier);}
+			constexpr static size_t _tierShift(size_t tier)    {return HASH_BITS-_tierBits(tier);}
+
 
 		public:
 			hashmap()    : _table{_table_tier0}, _tier(0) {}
@@ -71,17 +77,12 @@ namespace coop
 			}
 
 		protected:
-			constexpr static size_t _tierBits (size_t tier)    {return 4+2*tier;}
-			constexpr static size_t _tierSize (size_t tier)    {return 1<<_tierBits(tier);}
-			constexpr static size_t _tierShift(size_t tier)    {return HASH_BITS-_tierBits(tier);}
-
-		protected:
 			forward_list _list;
 
 			// Table sizes 16,64,256 ... max 2^32
 			std::atomic<bookmark_t*> _table[15];
 			std::atomic<size_t>      _tier;
-			bookmark_t               _table_tier0[16];
+			bookmark_t               _table_tier0[_tierSize(0)];
 		};
 	}
 

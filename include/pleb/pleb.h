@@ -6,6 +6,53 @@
 
 namespace pleb
 {
+#define PLEB_RESOURCE_VERB(METHOD_NAME) \
+	template<typename... Args> \
+	auto METHOD_NAME(resource_ref resource, Args&& ... args) {\
+		return resource->METHOD_NAME(std::forward<Args>(args)...);}
+
+	PLEB_RESOURCE_VERB(subscribe)
+	PLEB_RESOURCE_VERB(publish)
+
+	PLEB_RESOURCE_VERB(GET)
+	PLEB_RESOURCE_VERB(PUT)
+	PLEB_RESOURCE_VERB(POST)
+	PLEB_RESOURCE_VERB(PATCH)
+	PLEB_RESOURCE_VERB(DELETE)
+
+	PLEB_RESOURCE_VERB(serve)
+
+#undef PLEB_RESOURCE_VERB
+
+
+	/*
+		Access the table of general type conversion rules.
+	*/
+	inline const std::shared_ptr<conversion_table> &
+		conversion_rules()                                                                             {return detail::global_conversion_table();}
+
+	template<typename ConversionFunctor, typename Input = detail::detect_parameter_t<ConversionFunctor>>
+	conversion_table::rule_ptr conversion_define(ConversionFunctor &&func)                             {return conversion_rules()->set(std::forward<ConversionFunctor>(func));}
+
+	/*
+		Perform a type conversion using the table of general conversion rules.
+			convert(...) throws no_conversion_rule if no rule is defined.
+			try_convert(...) returns a default value if no rule is defined.
+	*/
+	std::any convert(const std::any &x, std::type_index to_type)                                       {return conversion_rules()->convert(x,to_type);}
+	template<typename To, typename From>
+	To       convert(const From     &x)                                                                {return conversion_rules()->convert<To>(x);}
+
+	std::any try_convert(const std::any &x, std::type_index to_type, const std::any &on_error = {})    {return conversion_rules()->try_convert(x, to_type, on_error);}
+	template<typename To, typename From>
+	To       try_convert(const From     &x, const To &on_error = {})                                   {return conversion_rules()->try_convert(x, on_error);}
+
+
+
+
+
+
+#if 0
 	/*
 		Publish-Subscribe convenience functions.
 	*/
@@ -36,19 +83,6 @@ namespace pleb
 		Request-Response convenience functions.
 	*/
 
-	// Serve a resource.
-	[[nodiscard]] inline
-	std::shared_ptr<service> serve(
-			resource_ref       resource,
-			service_function &&function) noexcept                      {return resource->serve(std::move(function));}
-
-	// Serve a resource, providing a lockable service pointer and method.
-	template<class T> [[nodiscard]]
-	std::shared_ptr<service> serve(
-			resource_ref     resource,
-			std::weak_ptr<T> service_object,
-			void        (T::*service_method)(request&))                {return serve(std::move(resource), [m=service_method, w=std::move(service_object)](request &r) {if (auto s=w.lock()) (s.get()->*m)(r);});}
-
 
 	// Make a request, providing a client or future which receives the response.
 	inline                       void GET   (client_ref c, resource_ref t)                    {t->GET   (c);}
@@ -70,5 +104,32 @@ namespace pleb
 	template<class V = std::any> void push_POST  (resource_ref t, V &&value)    {t->push_POST  (std::forward<V>(value));}
 	template<class V = std::any> void push_PATCH (resource_ref t, V &&value)    {t->push_PATCH (std::forward<V>(value));}
 	inline                       void push_DELETE(resource_ref t)               {t->push_DELETE();}
+#endif
+
+	/*
+		Serve a resource with a request handler function.
+	*/
+	[[nodiscard]] inline
+	std::shared_ptr<service> serve(
+			resource_ref       resource,
+			service_function &&function) noexcept                      {return resource->serve(std::move(function));}
+
+	/*
+		Serve a resource with a request handler method.
+			The weak pointer is locked whenever the service is called.
+			If the service pointer outlives the object pointer, it will respond with "GONE".
+	*/
+	template<class T> [[nodiscard]]
+	std::shared_ptr<service> serve(
+			resource_ref     resource,
+			std::weak_ptr<T> svc_object,
+			void        (T::*svc_method)(request&))
+	{
+		return serve(std::move(resource), [m=svc_method, w=std::move(svc_object)](request &r)
+		{
+			if (auto s=w.lock()) (s.get()->*m)(r);
+			else r.respond_Gone();
+		});
+	}
 #endif
 }

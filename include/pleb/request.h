@@ -191,7 +191,7 @@ namespace pleb
 		~auto_request() noexcept(false)
 		{
 			// auto_request will not fire if destroyed as a result of stack unwinding.
-#if __cplusplus >= 201700 || __MSVC_LANG >= 201700
+#if __cplusplus >= 201700 || _MSVC_LANG >= 201700
 			if (std::uncaught_exceptions()) return;
 #else
 			if (std::uncaught_exception()) return;

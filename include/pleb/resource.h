@@ -79,6 +79,20 @@ namespace pleb
 		std::shared_ptr<subscription> subscribe(                    subscriber_function &&f)    {return this->emplace_subscriber(shared_from_this(), std::move(f));}
 		std::shared_ptr<subscription> subscribe(topic_view subpath, subscriber_function &&f)    {return subtopic(subpath)->subscribe(std::move(f));}
 
+		/*
+			Subscribe to a resource via calls to a method of some object.
+		*/
+		template<class T> [[nodiscard]]
+		std::shared_ptr<subscription> subscribe(
+			std::weak_ptr<T> handler_object,
+			void        (T::*handler_method)(const pleb::event&))
+		{
+			return subscribe([m=handler_method, w=std::move(handler_object)](const pleb::event &r)
+			{
+				if (auto s=w.lock()) (s.get()->*m)(r);
+			});
+		}
+
 
 		/*
 			PUBLISH an event.
@@ -115,6 +129,49 @@ namespace pleb
 		*/
 		[[nodiscard]] std::shared_ptr<service> serve(                    service_function &&function) noexcept    {return _trie::try_emplace_service(shared_from_this(), std::move(function));}
 		[[nodiscard]] std::shared_ptr<service> serve(topic_view subpath, service_function &&function) noexcept    {return this->subtopic(subpath)->serve(std::move(function));}
+
+		/*
+			Serve a resource using calls to a method of some object.
+				The weak pointer is locked whenever the service is called.
+				If the service pointer outlives the object pointer, it will respond with "GONE".
+		*/
+		template<class T> [[nodiscard]]
+		std::shared_ptr<service> serve(
+			std::weak_ptr<T> svc_object,
+			void        (T::*svc_method)(pleb::request&))
+		{
+			return serve([m=svc_method, w=std::move(svc_object)](pleb::request &r)
+			{
+				if (auto s = w.lock()) (s.get()->*m)(r);
+				else r.respond_Gone();
+			});
+		}
+
+		/*
+			Serve a POST-only resource.
+				Commonly used for creating things or causing side effects.
+		*/
+		template<class T> [[nodiscard]]
+		std::shared_ptr<service> serve_POST(
+			std::weak_ptr<T> svc_object,
+			status      (T::*svc_method)(pleb::request&))
+		{
+			return serve([m=svc_method, w=std::move(svc_object)](pleb::request &r)
+			{
+				if (auto s = w.lock()) switch (r.method())
+				{
+				case method::POST:
+					r.respond((s.get()->*m)(r));
+					break;
+				case method::OPTIONS:
+					r.respond_OK(method::POST | method::OPTIONS);
+					break;
+				default:
+					r.respond_MethodNotAllowed();
+				}
+				else r.respond_Gone();
+			});
+		}
 
 
 		/*
@@ -185,7 +242,7 @@ namespace pleb
 				pleb::request usually calls this method upon construction;
 				it can be used to issue the same request repeatedly.
 		*/
-		void issue(pleb::request &msg) const
+		void issue(pleb::request &msg)
 		{
 			msg.features &= ~flags::did_respond;
 
@@ -205,11 +262,18 @@ namespace pleb
 			return;
 
 		service_found:
-			svc->func(msg);
+			try
+			{
+				svc->func(msg);
+			}
+			catch (status s)               {msg.respond(s);}
+			catch (status_exception &e)    {msg.respond(e.status);}
 
 			// Default response if service did not respond or move message.
 			if (!(msg.features & flags::did_respond))
 				msg.respond(statuses::NoContent);
+
+			msg.features |= flags::did_send;
 		}
 
 		/*
@@ -217,18 +281,40 @@ namespace pleb
 				pleb::event usually calls this method upon construction;
 				it can be used to publish the same event repeatedly.
 		*/
-		void publish(const pleb::event &msg) const
+		void publish(const pleb::event &msg)
 		{
 			// Publish to this resource's direct subscribers.
-			for (subscription &sub : *this)
-				if (sub.accepts(msg.filtering & ~flags::recursive))
-					sub.func(msg);
+			publish_non_recursive(msg, msg.filtering & ~flags::recursive);
 
 			if (msg.recursive()) // Propagate up the chain.
 				for (resource_ptr node = parent(); node; node = node->parent())
-					for (subscription &sub : *node)
-						if (sub.accepts(msg.filtering | flags::recursive))
-							sub.func(msg);
+					node->publish_non_recursive(msg, msg.filtering | flags::recursive);
+		}
+
+		void publish_non_recursive(const pleb::event &msg, flags::filtering filtering)
+		{
+			for (subscription &sub : *this) if (sub.accepts(filtering))
+			{
+				try {sub.func(msg);}
+				catch (...)
+				{
+					auto exception = std::current_exception();
+					if (msg.filtering & flags::subscriber_exception)
+					{
+						// Throw recursive exceptions to the parent.
+						if (resource_ptr parent = this->parent())
+							parent->publish(statuses::InternalServerError, exception,
+								flags::subscriber_exception | flags::recursive,
+								msg.requirements);
+					}
+					else
+						publish(statuses::InternalServerError, exception,
+							flags::subscriber_exception | flags::recursive,
+							msg.requirements);
+					
+				}
+			}
+
 		}
 
 
@@ -269,8 +355,8 @@ inline pleb::resource_ptr pleb::find_nearest_resource(pleb::topic_view topic)   
 inline pleb::resource_ptr pleb::find_resource        (pleb::topic_view topic)    {return pleb::resource::find(topic);}
 
 // Process a request.
-inline void pleb::request::issue  ()    {resource->issue  (*this); features = features|flags::did_send;}
-inline void pleb::event  ::publish()    {resource->publish(*this); features = features|flags::did_send;}
+inline void pleb::request::issue  ()    {resource->issue  (*this);}
+inline void pleb::event  ::publish()    {resource->publish(*this); features |= flags::did_send;}
 
 inline pleb::service::service(resource_ptr _resource, service_function &&_func)
 	:
