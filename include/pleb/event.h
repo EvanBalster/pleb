@@ -74,7 +74,11 @@ namespace pleb
 
 
 	public:
-		subscription(resource_ptr _resource, subscriber_function &&_func);
+		subscription(
+			resource_ptr          resource,
+			subscriber_function &&func,
+			flags::filtering      ignored = flags::default_subscriber_ignore,
+			flags::handling       handling = flags::no_special_handling);
 		~subscription();
 	};
 }

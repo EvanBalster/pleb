@@ -158,7 +158,11 @@ namespace pleb
 
 
 	public:
-		service(resource_ptr _resource, service_function &&_func);
+		service(
+			resource_ptr       resource,
+			service_function &&func,
+			flags::filtering   ignored = flags::default_service_ignore,
+			flags::handling    handling = flags::no_special_handling);
 		~service();
 	};
 

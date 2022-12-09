@@ -120,6 +120,10 @@ namespace coop
 		trie_(std::string_view id, std::shared_ptr<trie_> _parent)    : _id(id), _parent(std::move(_parent)) {}
 		trie_(std::string_view id, trie_ &_parent)                    : _id(id), _parent(_parent.shared_from_this()) {}
 
+		template<typename Callback>
+		void visit_children(const Callback &callback) const noexcept(_children.visit(callback))
+			{_children.visit(callback);}
+
 		class constructor : public trie_
 		{
 		public:

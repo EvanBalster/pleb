@@ -30,6 +30,11 @@
 
 namespace pleb
 {
+	using resource_trie = coop::trie_<resource_data>;
+
+	using resource_trie_ptr = std::shared_ptr<resource_trie>;
+
+
 	/*
 		Topics form a global hierarchy (trie) to which 
 	*/
@@ -40,7 +45,7 @@ namespace pleb
 		using _trie = coop::trie_<resource_data>;
 
 		resource(resource_ptr parent, std::string_view id)       : _trie(id, std::shared_ptr<_trie>(parent, (_trie*) &*parent)) {}
-		static resource_ptr _asTopic(std::shared_ptr<_trie> p)   {return resource_ptr(p, (resource*) &*p);}
+		static resource_ptr _asTopic(std::shared_ptr<_trie> r)   {auto p=static_cast<resource*>(r.get()); return resource_ptr(std::move(r), p);}
 
 
 	public:
@@ -76,8 +81,21 @@ namespace pleb
 				Subscribers receive subsequent reports to the resource
 				and the children/descendants of the resource (not counting aliases).
 		*/
-		std::shared_ptr<subscription> subscribe(                    subscriber_function &&f)    {return this->emplace_subscriber(shared_from_this(), std::move(f));}
-		std::shared_ptr<subscription> subscribe(topic_view subpath, subscriber_function &&f)    {return subtopic(subpath)->subscribe(std::move(f));}
+		std::shared_ptr<subscription> subscribe(
+			subscriber_function &&f,
+			flags::filtering      ignore_flags = flags::default_subscriber_ignore,
+			flags::handling       handling     = flags::no_special_handling)
+		{
+			return this->emplace_subscriber(shared_from_this(), std::move(f));
+		}
+		std::shared_ptr<subscription> subscribe(
+			topic_view            subpath,
+			subscriber_function &&f,
+			flags::filtering      ignore_flags = flags::default_subscriber_ignore,
+			flags::handling       handling     = flags::no_special_handling)
+		{
+			return subtopic(subpath)->subscribe(std::move(f));
+		}
 
 		/*
 			Subscribe to a resource via calls to a method of some object.
@@ -85,12 +103,14 @@ namespace pleb
 		template<class T> [[nodiscard]]
 		std::shared_ptr<subscription> subscribe(
 			std::weak_ptr<T> handler_object,
-			void        (T::*handler_method)(const pleb::event&))
+			void        (T::*handler_method)(const pleb::event&),
+			flags::filtering ignore_flags = flags::default_subscriber_ignore,
+			flags::handling  handling     = flags::no_special_handling)
 		{
 			return subscribe([m=handler_method, w=std::move(handler_object)](const pleb::event &r)
 			{
 				if (auto s=w.lock()) (s.get()->*m)(r);
-			});
+			}, ignore_flags, capabilities);
 		}
 
 
@@ -319,6 +339,56 @@ namespace pleb
 
 
 		/*
+			"visit" entities within this resource, via callback.
+				visit_resources invokes for this resource and each of its descendants.
+				visit_services invokes for each service beneath this resource.
+				visit_subscribers invokes for each service beneath this resource.
+
+			callback        -- a functor accepting a shared_ptr to the visited item.
+			recursion_depth -- how many generations of children to visit (0 = just this)
+
+			Resources mainly exist in order to host services and subscribers, but may exist
+				as a result of child resources, forced resolution or dangling references.
+				Think of them as folders -- on their own, more suggestive than informative.
+
+
+			WARNING: pending integration of a robust lock-free hashmap, these methods lock
+				the branches of the resource tree in read mode.  This can lead to deadlock
+				if the callback attempts to modify the resources it is traversing.
+				Avoid performing complex actions within the callback.
+		*/
+		template<typename Callback>
+		std::enable_if_t<std::is_invocable<Callback, const resource_ptr&>::value>
+			visit_resources(const Callback &callback, size_t recursion_depth = 255, bool skip_this = false)
+		{
+			if (!skip_this) callback(shared_from_this());
+			auto scan = [&](const std::string &, resource_trie_ptr node)
+			{
+				auto resource = _asTopic(std::move(node));
+				callback(resource);
+				if (recursion_depth--) {resource->visit_children(scan); ++recursion_depth;}
+			};
+			if (recursion_depth--) this->visit_children(scan);
+		}
+		template<typename Callback>
+		std::enable_if_t<std::is_invocable<Callback, std::shared_ptr<service>>::value>
+			visit_services(const Callback &callback, size_t recursion_depth = 255)
+		{
+			visit_resources([&](const resource_ptr &rc)
+				{if (auto svc=rc->service_lock()) callback(std::move(svc));},
+				recursion_depth);
+		}
+		template<typename Callback>
+		std::enable_if_t<std::is_invocable<Callback, std::shared_ptr<subscription>>::value>
+			visit_subscriptions(const Callback &callback, size_t recursion_depth = 255)
+		{
+			visit_resources([&](const resource_ptr &rc)
+				{if (auto sub : *rc) callback(std::move(sub));},
+				recursion_depth);
+		}
+
+
+		/*
 			Alias a direct child of this resource to another existing resource.
 				The alias has the same lifetime as the original, and is
 				interchangeable with it for both publishers and new subscribers.
@@ -358,23 +428,29 @@ inline pleb::resource_ptr pleb::find_resource        (pleb::topic_view topic)   
 inline void pleb::request::issue  ()    {resource->issue  (*this);}
 inline void pleb::event  ::publish()    {resource->publish(*this); features |= flags::did_send;}
 
-inline pleb::service::service(resource_ptr _resource, service_function &&_func)
+inline pleb::service::service(resource_ptr _resource, service_function &&_func,
+	flags::filtering ignored, flags::handling handling)
 	:
-	receiver(flags::default_service_ignore), resource(std::move(_resource)),
+	receiver(ignored, handling), resource(std::move(_resource)),
 	func(std::move(_func))
 {
 	resource->publish(statuses::Created, this,
 		flags::service_status      | flags::recursive);
 }
 
-inline pleb::subscription::subscription(resource_ptr _resource, subscriber_function &&_func)
+inline pleb::subscription::subscription(resource_ptr _resource, subscriber_function &&_func,
+	flags::filtering ignored, flags::handling handling)
 	:
-	receiver(flags::default_subscriber_ignore), resource(std::move(_resource)),
+	receiver(ignored, handling), resource(std::move(_resource)),
 	func(std::move(_func))
 {
 	resource->publish(statuses::Created, this,
 		flags::subscription_status | flags::recursive);
 }
 
-inline pleb::service     ::~service()         {resource->publish(statuses::Gone, this, flags::service_status      | flags::recursive);}
-inline pleb::subscription::~subscription()    {resource->publish(statuses::Gone, this, flags::subscription_status | flags::recursive);}
+/*
+	Publishing status messages from a destructor is likely to create stability issues.
+		Instead, applications should hold weak pointers and actively monitor for expiration.
+*/
+inline pleb::service     ::~service()         {} //{resource->publish(statuses::Gone, this, flags::service_status      | flags::recursive);}
+inline pleb::subscription::~subscription()    {} //{resource->publish(statuses::Gone, this, flags::subscription_status | flags::recursive);}

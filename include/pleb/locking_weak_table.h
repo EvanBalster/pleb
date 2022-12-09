@@ -1,5 +1,7 @@
 #pragma once
 
+#include <type_traits>
+
 
 /*
 	This class defines a concurrent hashtable protected by a read-write mutex.
@@ -90,7 +92,7 @@ namespace coop
 		void clear() noexcept    {std::unique_lock lock(_mtx); _map.clear();}
 
 		[[nodiscard]]
-		std::shared_ptr<value_type> get(key_reference key) const noexcept
+		std::shared_ptr<value_type> find(key_reference key) const noexcept
 		{
 			shared_lock lock(_mtx);
 
@@ -101,7 +103,7 @@ namespace coop
 
 		template<typename ConstructorType, typename... Args>
 		[[nodiscard]]
-		std::shared_ptr<value_type> find_or_create(key_reference key, Args && ... args) noexcept
+		std::shared_ptr<value_type> find_or_create(key_reference key, Args && ... args) noexcept(std::make_shared<ConstructorType>(std::forward<Args>(args) ...))
 		{
 			{
 				shared_lock lock(_mtx);
@@ -127,6 +129,27 @@ namespace coop
 			auto &elem = _map[detail::key_view<key_type>::view(key)];
 			if (elem.expired()) {elem = std::move(ptr); return true;}
 			else                                        return false;
+		}
+
+
+		// Visit each item in the table via a function taking a key and weak pointer.
+		template<typename Callback>
+		std::enable_if_t<std::is_invocable<Callback, const Value&, const std::weak_ptr<Key>&>::value>
+			visit(const Callback &callback) const    noexcept(std::declval<Callback>()(std::declval<Value>(),std::weak_ptr<Key>()))
+		{
+			shared_lock lock(_mtx);
+			for (auto &pair : _map) callback(pair.first, pair.second);
+		}
+
+		// Visit each item in the table via a function taking a key and shared pointer.
+		template<typename Callback>
+		std::enable_if_t<std::is_invocable<Callback, const Value&, const std::shared_ptr<Key>&>::value>
+			visit(const Callback &callback) const    noexcept(std::declval<Callback>()(std::declval<Value>(),std::weak_ptr<Key>()))
+		{
+			shared_lock lock(_mtx);
+			for (auto &pair : _map)
+				if (auto p = pair.second.lock())
+					callback(pair.first, std::move(p));
 		}
 
 

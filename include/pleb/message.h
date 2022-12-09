@@ -234,7 +234,7 @@ namespace pleb
 	{
 	public:
 		const flags::filtering ignored;
-		const flags::handling   handling;
+		const flags::handling  handling;
 
 	public:
 		receiver(

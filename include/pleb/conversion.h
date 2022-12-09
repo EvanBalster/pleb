@@ -238,7 +238,7 @@ namespace pleb
 				get () throws no_conversion_rule on failure.
 				Templated calls yield a rule that can work directly with the type.
 		*/
-		rule_ptr find(std::type_index to, std::type_index from) const noexcept    {return _table.get({to, from});}
+		rule_ptr find(std::type_index to, std::type_index from) const noexcept    {return _table.find({to, from});}
 
 		template<typename To> std::shared_ptr<const rule::to<To>>
 			find(std::type_index from)                          const noexcept    {return std::static_pointer_cast<const rule::to<To>>(find(typeid(To), from));}
@@ -247,7 +247,7 @@ namespace pleb
 			find()                                              const noexcept    {return std::static_pointer_cast<const rule::to_from<To, From>>(find(typeid(To), typeid(From)));}
 
 
-		rule_ptr get (std::type_index to, std::type_index from) const             {auto p=_table.get({to,from}); if (!p) throw no_conversion_rule(to,from); return p;}
+		rule_ptr get (std::type_index to, std::type_index from) const             {auto p=_table.find({to,from}); if (!p) throw no_conversion_rule(to,from); return p;}
 
 		template<typename To> std::shared_ptr<const rule::to<To>>
 			get (std::type_index from)                          const             {return std::static_pointer_cast<const rule::to<To>>(get(typeid(To), from));}
