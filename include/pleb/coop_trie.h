@@ -77,7 +77,7 @@ namespace coop
 				try_child may fail, returning null.
 				get_child will create a subtrie if it does not exist.
 		*/
-		[[nodiscard]] std::shared_ptr<trie_> try_child(std::string_view id) noexcept    {return _children.get(id);}
+		[[nodiscard]] std::shared_ptr<trie_> try_child(std::string_view id) noexcept    {return _children.find(id);}
 		[[nodiscard]] std::shared_ptr<trie_> get_child(std::string_view id)             {return _children.template find_or_create<constructor>(id, id, *this);}
 		//[[nodiscard]] std::shared_ptr<trie_> operator[](std::string_view id) noexcept    {return get_child(id);}
 
@@ -121,7 +121,7 @@ namespace coop
 		trie_(std::string_view id, trie_ &_parent)                    : _id(id), _parent(_parent.shared_from_this()) {}
 
 		template<typename Callback>
-		void visit_children(const Callback &callback) const noexcept(_children.visit(callback))
+		void visit_children(const Callback &callback) const noexcept(noexcept(_children.visit(callback)))
 			{_children.visit(callback);}
 
 		class constructor : public trie_

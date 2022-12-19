@@ -110,7 +110,7 @@ namespace pleb
 			return subscribe([m=handler_method, w=std::move(handler_object)](const pleb::event &r)
 			{
 				if (auto s=w.lock()) (s.get()->*m)(r);
-			}, ignore_flags, capabilities);
+			}, ignore_flags, handling);
 		}
 
 
@@ -358,7 +358,7 @@ namespace pleb
 				Avoid performing complex actions within the callback.
 		*/
 		template<typename Callback>
-		std::enable_if_t<std::is_invocable<Callback, const resource_ptr&>::value>
+		std::enable_if_t<std::is_invocable_v<Callback, const resource_ptr&>>
 			visit_resources(const Callback &callback, size_t recursion_depth = 255, bool skip_this = false)
 		{
 			if (!skip_this) callback(shared_from_this());
@@ -366,12 +366,12 @@ namespace pleb
 			{
 				auto resource = _asTopic(std::move(node));
 				callback(resource);
-				if (recursion_depth--) {resource->visit_children(scan); ++recursion_depth;}
+				if (recursion_depth--) {resource->visit_resources(callback, recursion_depth-1, true);}
 			};
 			if (recursion_depth--) this->visit_children(scan);
 		}
 		template<typename Callback>
-		std::enable_if_t<std::is_invocable<Callback, std::shared_ptr<service>>::value>
+		std::enable_if_t<std::is_invocable_v<Callback, service_ptr>>
 			visit_services(const Callback &callback, size_t recursion_depth = 255)
 		{
 			visit_resources([&](const resource_ptr &rc)
@@ -379,11 +379,11 @@ namespace pleb
 				recursion_depth);
 		}
 		template<typename Callback>
-		std::enable_if_t<std::is_invocable<Callback, std::shared_ptr<subscription>>::value>
+		std::enable_if_t<std::is_invocable_v<Callback, subscription_ptr>>
 			visit_subscriptions(const Callback &callback, size_t recursion_depth = 255)
 		{
 			visit_resources([&](const resource_ptr &rc)
-				{if (auto sub : *rc) callback(std::move(sub));},
+				{for (auto i=rc->begin(),e=rc->end(); i!=e; ++i) callback(i);},
 				recursion_depth);
 		}
 

@@ -1,11 +1,17 @@
 # PLEB (Process-Local Event Bus)
 ⚠ This library is in early development.  The API is subject to change.
 
-PLEB is a header-only C++17 library that provides a **resource tree** for microservices within a process.  Resources are used to handle request-reply and publish-subscribe communication patterns, similar to web services, but
+PLEB is a header-only library extending C++17 with common patterns from network programming.  It provides a concurrent global **resource tree** similar to the index of a web server, implementing Request-Reply and Publish-Subscribe messaging patterns as lightweight function calls using any data structure.
 
-PLEB is multi-threaded and (mostly*) wait-free, meaning it can be used for highly time-sensitive concurrent applications.  The resource tree is (usually) global and indexed by names similar to file paths.  PLEB does not include any protocols for communicating with other processes or machines.  Instead, it is designed to act as an interface between application code and external communications.
+PLEB's design is based on the following observations:
 
-Resources allow us to **publish** events to any number of subscribers, to make a **request** to a single service, or both.  These communications are are realized as function calls.  While PLEB is thread-safe for purposes of setting up and making these calls, it imposes no locks or message queueing — instead, the application is expected to impose its own concurrency measures.
+1. Request-Reply (REST) and Publish-Subscribe are excellent patterns for messaging and error handling — not only across networks. but also within programs with multiple modules or threads.
+2. In-process messages do not necessarily need serialization or queueing, both of which create potentially unnecessary work.
+3. Global pathnames are more manageable than references or GUIDs when communicating across a complex program.
+
+PLEB does not replace messaging frameworks like ZeroMQ and NNG; rather, it can act as a front-end.  Where traditional frameworks treat in-process communication as a special case of network sockets, PLEB allows us to do the opposite by using local resources as an interface to remote ones.
+
+Resources have path-like names such as `output/1` .  PLEB messages are realized as function calls using `std::any` as a generic container.  PLEB is multi-threaded and (mostly*) wait-free, meaning it can be used for extremely time-sensitive concurrent applications.  While PLEB is thread-safe for purposes of setting up the resource tree and issuing messages, it imposes no locks or message queueing — the application is expected to impose its own concurrency measures.
 
 (* PLEB's resource tree uses locking operations when adding resources or looking them up, pending the integration of a suitable wait-free hash table algorithm,)
 
@@ -31,18 +37,15 @@ void main()
         "/service/handshake",
 		service, &MyService::handshake);
     
-    pleb::reply reply = pleb::request("/service/handshake");
+    pleb::reply reply = pleb::GET("/service/handshake");
 }
 ```
 
+## How are Messages Processed?
 
+When a Request is issued to a resource, or an Event is published, lock-free algorithms are used to identify the recipient (of a Request) or recipients (of an Event) and invoke them.  Handlers are implemented as a `std::function` accepting a reference to the message.  The value passed with the message, if any, is contained within a generic `std::any` container.
 
-## Smart Pointers
-
-PLEB uses C++11's `shared_ptr` and `weak_ptr` to solve the most common thread safety issue with inter-thread function calls:  the 
-
-Normally, `shared_ptr` and `weak_ptr` require the indicated object to be allocated on the heap.  This can be inconvenient when an object would otherwise exist on the stack or as a member of another object.  For this reason, we provide a utility called `life_lock` which allows *any* object to generate weak pointers to itself, and which only blocks if these have been locked as `shared_ptr` when the object is destroyed.
-
+The primary thread safety mechanism used by the resource tree is `std::weak_ptr::lock()`, typically a non-blocking operation.  `std::function` and `std::any` allow us to invoke any logic we like for the cost of two virtual function calls.  On the rare occasion where this is too much overhead for some real-time operation, a request may be used at set-up time to provide a direct reference to some low-level mechanism.
 
 ## A Native Event Bus
 
@@ -109,11 +112,9 @@ The push-pull messaging pattern is a specialization of the request pattern where
 
 ## Automatic Type Conversion
 
-**NOT YET IMPLEMENTED**
-
 PLEB uses `std::any` to exchange values of arbitrary type, but in some cases it may be desirable for producers and consumers of information to work with different representations of the data.  Usually this is because certain systems (such as networking and files) need to work with serialized data while others need to work with native objects.
 
-PLEB provides a lookup table mapping `std::type_index` pairs to type conversion functions.  When a callee attempts to retrieve a value whose type differs from the type provided, the type conversion corresponding to the provided type and the desired type will be invoked.  Most often this will be a marshalling or unmarshalling function of some kind.
+PLEB provides a global lookup table mapping `std::type_index` pairs to type conversion functions.  When a callee attempts to retrieve a value whose type differs from the type provided, the type conversion corresponding to the provided type and the desired type may be invoked.  Most often this will be a serialization or marshalling function.
 
 A secondary table is provided for patching operations, where the source type describes a set of modifications to be made to the destination type.  When no patching rule is available, PLEB falls back to type conversion rules and attempts to overwrite the destination type.
 
@@ -121,11 +122,19 @@ Type conversion functions are contained in a cooperative collection (see below);
 
 
 
+# Design and Idioms
+
+## Smart Pointers
+
+PLEB uses C++11's `shared_ptr` and `weak_ptr` to solve the most common thread safety issue with inter-thread resources and calls:  destruction.  Whenever a service or subscriber receives a call, PLEB uses `weak_ptr::lock()` to ensuring the object exists until the call is completed.  (Locking a weak pointer is a non-blocking operation.)  When binding calls to methods on an application class, PLEB expects a `weak_ptr` as well.
+
+Normally, `shared_ptr` and `weak_ptr` require the indicated object to be allocated on the heap.  This can be inconvenient when an object would otherwise exist on the stack or as a member of another object.  For this reason, we provide a utility called `life_lock` which allows *any* object to generate weak pointers to itself, and which only blocks if these have been locked as `shared_ptr` when the object is destroyed.
+
 ## Cooperative Data Structures
 
-PLEB is based on wait-free "cooperative data structures", in which collections are owned by their elements.  For example, subscribers to a topic strongly reference a subscription which strongly references a topic and all its ancestors.  Services providing a resource own that resource which owns its parent resources.
+PLEB is based on "cooperative data structures", in which collections are owned (strongly referenced) by the elements inside them.  For example, subscribers to a topic own a subscription which owns a topic and all its ancestors.  Services own the resource on which they serve, which owns its parent resources.
 
-The only way to remove an element from a cooperative collection is to allow that element to expire by releasing all strong references (that is, `shared_ptr`'s) to it.  The only way to destroy a cooperative is for all strong references to the collection and its elements to expire.
+The only way to remove an element from a cooperative collection is to allow that element to expire by releasing all strong references (that is, `shared_ptr`'s) to it.  The only way to destroy a cooperative is for all strong references to the collection and its elements and sub-elements to expire.  This way, a resourc
 
 These properties make cooperatives well-suited to coordinating producers with consumers, services with clients and publishers with subscribers.
 

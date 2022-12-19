@@ -90,7 +90,7 @@ namespace pleb
 
 		// Access value as a specific type.  Only succeeds if the type is an exact match.
 		template<class T> const T *value_cast()  const noexcept    {return std_any::any_cast<T>(&_value);}
-		template<class T> T       *value_cast()        noexcept    {return std_any::any_cast<T>(&value);}
+		template<class T> T       *value_cast()        noexcept    {return std_any::any_cast<T>(&_value);}
 
 		// Get a constant pointer to the value.
 		//  This method automatically deals with indirect values.

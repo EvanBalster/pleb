@@ -103,7 +103,7 @@ namespace coop
 
 		template<typename ConstructorType, typename... Args>
 		[[nodiscard]]
-		std::shared_ptr<value_type> find_or_create(key_reference key, Args && ... args) noexcept(std::make_shared<ConstructorType>(std::forward<Args>(args) ...))
+		std::shared_ptr<value_type> find_or_create(key_reference key, Args && ... args) noexcept(noexcept(std::make_shared<ConstructorType>(std::forward<Args>(args) ...)))
 		{
 			{
 				shared_lock lock(_mtx);
@@ -133,18 +133,16 @@ namespace coop
 
 
 		// Visit each item in the table via a function taking a key and weak pointer.
-		template<typename Callback>
-		std::enable_if_t<std::is_invocable<Callback, const Value&, const std::weak_ptr<Key>&>::value>
-			visit(const Callback &callback) const    noexcept(std::declval<Callback>()(std::declval<Value>(),std::weak_ptr<Key>()))
+		template<typename Callback,                   std::enable_if_t<std::is_invocable_v<Callback, const Key&, const std::weak_ptr<Value>&>, int> Dummy=0>
+		void visit(const Callback &callback) const    noexcept(noexcept(std::declval<Callback>()(std::declval<Key>(),std::weak_ptr<Value>())))
 		{
 			shared_lock lock(_mtx);
 			for (auto &pair : _map) callback(pair.first, pair.second);
 		}
 
 		// Visit each item in the table via a function taking a key and shared pointer.
-		template<typename Callback>
-		std::enable_if_t<std::is_invocable<Callback, const Value&, const std::shared_ptr<Key>&>::value>
-			visit(const Callback &callback) const    noexcept(std::declval<Callback>()(std::declval<Value>(),std::weak_ptr<Key>()))
+		template<typename Callback,                   std::enable_if_t<std::is_invocable_v<Callback, const Key&, std::shared_ptr<Value>>, int> Dummy=0>
+		void visit(const Callback &callback) const    noexcept(noexcept(std::declval<Callback>()(std::declval<Key>(),std::shared_ptr<Value>())))
 		{
 			shared_lock lock(_mtx);
 			for (auto &pair : _map)
