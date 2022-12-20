@@ -1,7 +1,7 @@
 #pragma once
 
 
-#include "resource.h"
+#include "topic_impl.hpp"
 
 
 namespace pleb

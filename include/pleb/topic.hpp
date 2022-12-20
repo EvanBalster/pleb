@@ -4,10 +4,11 @@
 #include <string_view>
 #include <functional>
 
-#include "flags.h"
-#include "conversion.h"
-#include "method.h"
-#include "status.h"
+#include "flags.hpp"
+#include "method.hpp"
+#include "status.hpp"
+
+#include "conversion.hpp"
 
 
 namespace std

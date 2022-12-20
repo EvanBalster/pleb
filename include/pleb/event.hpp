@@ -1,7 +1,7 @@
 #pragma once
 
-#include "message.h"
-#include "status.h"
+#include "message.hpp"
+#include "status.hpp"
 
 /*
 	PLEB facilitates publishing events to topics,

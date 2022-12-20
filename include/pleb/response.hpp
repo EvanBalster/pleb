@@ -4,8 +4,8 @@
 #include <future>
 #include <exception>
 
-#include "message.h"
-#include "status.h"
+#include "message.hpp"
+#include "status.hpp"
 
 /*
 	Certain messages, such as requests, provide for responding to the sender.

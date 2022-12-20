@@ -3,9 +3,9 @@
 
 #include <cstdint>
 
-#include "flags.h"
-#include "pleb_base.h"
-#include "content.h"
+#include "flags.hpp"
+#include "topic.hpp"
+#include "content.hpp"
 
 
 namespace pleb

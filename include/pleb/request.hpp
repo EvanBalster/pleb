@@ -3,8 +3,8 @@
 #include <future>
 #include <exception>
 
-#include "response.h"
-#include "method.h"
+#include "response.hpp"
+#include "method.hpp"
 
 /*
 	PLEB delivers requests to services, which may then respond

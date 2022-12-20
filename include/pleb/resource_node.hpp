@@ -2,10 +2,10 @@
 
 #include <deque>
 
-#include "pleb_base.h"
-
-#include "request.h"
-#include "event.h"
+#include "coop/pool.hpp"
+#include "coop/trie.hpp"
+#include "request.hpp"
+#include "event.hpp"
 
 
 namespace coop {template<class T> class trie_;}

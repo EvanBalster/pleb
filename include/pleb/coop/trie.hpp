@@ -6,8 +6,8 @@
 #include <mutex>
 #include <cstdint>
 
-#include "coop_pool.h"
-#include "locking_weak_table.h" // Hope to replace with lockfree table later
+#include "pool.hpp"
+#include "locking_weak_table.hpp" // Hope to replace with lockfree table later
 
 
 /*

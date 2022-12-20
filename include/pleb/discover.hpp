@@ -9,7 +9,8 @@
 	This is useful for implementing gateways and network communications.
 */
 
-#include "resource.h"
+#include "topic.hpp"
+#include "topic_impl.hpp"
 
 
 namespace pleb

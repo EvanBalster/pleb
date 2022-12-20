@@ -1,11 +1,10 @@
 #pragma once
 
 
-#include "coop_trie.h"
-#include "resource_base.h"
+#include "resource_node.hpp"
 
-#include "request.h"
-#include "event.h"
+#include "request.hpp"
+#include "event.hpp"
 
 
 /*

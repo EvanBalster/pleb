@@ -3,7 +3,7 @@
 #include <typeindex>
 #include <tuple>
 
-#include "bind_traits.h"
+#include "bind_traits.hpp"
 
 
 /*

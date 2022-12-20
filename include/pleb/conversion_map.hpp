@@ -2,7 +2,7 @@
 
 
 
-#include "conversion.h"
+#include "conversion.hpp"
 
 /*
 	A concurrent class encapsulating a collection of type conversion rules.

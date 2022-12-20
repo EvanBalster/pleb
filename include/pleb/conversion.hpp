@@ -12,7 +12,7 @@
 
 // Concurrent table.
 #include <memory>
-#include "locking_weak_table.h"
+#include "coop/locking_weak_table.hpp"
 
 
 /*
