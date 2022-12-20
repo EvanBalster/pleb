@@ -55,7 +55,7 @@ namespace coop
 			Get this trie's identifier or complete path.
 				The path is a list of ancestors, not including the root.
 		*/
-		const std::string &id  ()                     const noexcept    {return _id;}
+		const std::string &id  ()                   const noexcept    {return _id;}
 		std::string      path(char separator = '/') const             {std::string s; _path(s,separator); return s;}
 
 

@@ -33,13 +33,13 @@ namespace pleb
 	public:
 		template<typename T = std::any>
 		event(
-			nearest_resource_ref destination,
+			pleb::topic          topic,
 			pleb::status         status,
 			T                  &&value     = {},
 			flags::filtering     filtering = flags::default_message_filtering,
 			flags::handling      handling  = flags::no_special_handling)
 			:
-			message(std::move(destination), code_t(status.code),
+			message(std::move(topic), code_t(status.code),
 				std::forward<T>(value), filtering, handling)
 			{}
 
@@ -66,16 +66,16 @@ namespace pleb
 	class subscription : public receiver
 	{
 	public:
-		const resource_ptr resource;
+		const resource_node_ptr resource;
 
 	private:
-		friend class resource;
+		friend class topic;
 		const subscriber_function func;
 
 
 	public:
 		subscription(
-			resource_ptr          resource,
+			resource_node_ptr     resource,
 			subscriber_function &&func,
 			flags::filtering      ignored = flags::default_subscriber_ignore,
 			flags::handling       handling = flags::no_special_handling);

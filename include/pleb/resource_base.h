@@ -33,8 +33,8 @@ namespace pleb
 		// Try to emplace a service.  May fail if service already exists.
 		[[nodiscard]] std::shared_ptr<service>
 			try_emplace_service(
-				resource_ptr     &&p,
-				service_function &&f)    {return _service.try_emplace(std::move(p), std::move(f));}
+				const resource_node_ptr &p,
+				service_function       &&f)    {return _service.try_emplace(p, std::move(f));}
 
 		// Access the service like a weak_ptr
 		std::shared_ptr<service> service_lock() const noexcept    {return _service.lock();}
@@ -45,12 +45,11 @@ namespace pleb
 		// Emplace a subscriber.
 		[[nodiscard]] std::shared_ptr<subscription>
 			emplace_subscriber(
-				resource_ptr        &&p,
-				subscriber_function &&f)    {return _subs.emplace(std::move(p), std::move(f));}
+				const resource_node_ptr &p,
+				subscriber_function    &&f)    {return _subs.emplace(p, std::move(f));}
 
 		// Iterate over subscribers.
-		subscriber_iterator begin() const    {return _subs.begin();}
-		subscriber_iterator end  () const    {return _subs.end  ();}
+		const subscriber_list &subscribers() const    {return _subs;}
 
 
 	private:

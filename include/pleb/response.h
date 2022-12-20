@@ -37,13 +37,13 @@ namespace pleb
 	public:
 		template<typename T = std::any>
 		response(
-			resource_ref     resource, // Original subject + rules for special handling
+			pleb::topic      topic, // Topic of the request (also provides handling rules)
 			pleb::status     status,
 			T              &&value     = {},
 			flags::filtering filtering = flags::default_message_filtering,
 			flags::handling  handling  = flags::no_special_handling)
 			:
-			message(std::move(resource), code_t(status.code),
+			message(std::move(topic), code_t(status.code),
 				std::forward<T>(value), filtering, handling)
 			{}
 
@@ -87,9 +87,9 @@ namespace pleb
 			Reply to this client.
 		*/
 		template<class T = std_any::any>
-		void respond(resource_ptr resource, status status, T &&value = {}) const
+		void respond(topic topic, status status, T &&value = {}) const
 		{
-			if (func) func(response(std::move(resource), status, std::move(value)));
+			if (func) func(response(std::move(topic), status, std::move(value)));
 		}
 	};
 
@@ -149,25 +149,10 @@ namespace pleb
 
 
 
-	/*
-		client_ref is simply a shared_ptr to a client.
-			Extended constructors make it more versatile as a function parameter.
-	*/
-	class client_ref : public std::shared_ptr<client>
-	{
-	public:
-		// 1. No method for responding; response is discarded.
-		constexpr explicit client_ref()          noexcept    {}
-		constexpr          client_ref(nullptr_t) noexcept    {}
+	template<typename T>
+	client_ref::client_ref(std::future<T> *f)
+		: client_ptr(f ? std::make_shared<client_promise<T>>(f) : nullptr) {}
 
-		// 2. Set the provided future to receive the response.
-		template<typename T>
-		client_ref(std::future<T> *f)                 : client_ptr(f ? std::make_shared<client_promise<T>>(f) : nullptr) {}
-
-		// 3. Provide a callback function to handle the response.
-		client_ref(response_function &&f)             : client_ptr(f ? std::make_shared<pleb::client>(std::move(f)) : nullptr) {}
-
-		// 4. Pass a client object to handle the response.
-		using client_ptr::client_ptr;
-	};
+	client_ref::client_ref(response_function &&f)
+		: client_ptr(f ? std::make_shared<pleb::client>(std::move(f)) : nullptr) {}
 }

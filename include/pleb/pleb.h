@@ -8,19 +8,19 @@ namespace pleb
 {
 #define PLEB_RESOURCE_VERB(METHOD_NAME) \
 	template<typename... Args> \
-	auto METHOD_NAME(resource_ref resource, Args&& ... args) {\
-		return resource->METHOD_NAME(std::forward<Args>(args)...);}
+	auto METHOD_NAME(pleb::topic topic, Args&& ... args) {\
+		return topic.METHOD_NAME(std::forward<Args>(args)...);}
 
 	PLEB_RESOURCE_VERB(subscribe)
 	PLEB_RESOURCE_VERB(publish)
+
+	PLEB_RESOURCE_VERB(serve)
 
 	PLEB_RESOURCE_VERB(GET)
 	PLEB_RESOURCE_VERB(PUT)
 	PLEB_RESOURCE_VERB(POST)
 	PLEB_RESOURCE_VERB(PATCH)
 	PLEB_RESOURCE_VERB(DELETE)
-
-	PLEB_RESOURCE_VERB(serve)
 
 #undef PLEB_RESOURCE_VERB
 

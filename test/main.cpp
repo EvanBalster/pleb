@@ -71,8 +71,8 @@ void printString(const pleb::event &event)
 {
 	auto *str = event.get<const std::string>();
 
-	if (str) std::cout << event.resource->topic() << ": " << *str << std::endl;
-	else     std::cout << event.resource->topic() << "printString: not a string" << std::endl;
+	if (str) std::cout << event.topic.path() << ": " << *str << std::endl;
+	else     std::cout << event.topic.path() << "printString: not a string" << std::endl;
 }
 
 namespace

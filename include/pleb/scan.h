@@ -53,7 +53,7 @@ namespace pleb
 	template<class Callback,            std::enable_if_t<std::is_invocable<Callback, service_ptr>::value,int> Dummy = 0>
 	subscription_ptr scan_services(
 		Callback        callback,
-		resource_ptr    root     = resource::root(),
+		topic           root     = topic::root(),
 		flags::handling handling = flags::no_special_handling)
 	{
 		auto watch = detail::scan_subscribe<Callback, service_ptr>(flags::service_status, callback, root, handling);
@@ -64,7 +64,7 @@ namespace pleb
 	template<class Callback,            std::enable_if_t<std::is_invocable_v<Callback, subscription_ptr>,int> Dummy = 0>
 	subscription_ptr scan_subscriptions(
 		Callback        callback,
-		resource_ptr    root     = resource::root(),
+		topic           root     = topic::root(),
 		flags::handling handling = flags::no_special_handling)
 	{
 		auto watch = detail::scan_subscribe<Callback, subscription_ptr>(flags::subscription_status, callback, root, handling);

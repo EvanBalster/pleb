@@ -59,13 +59,13 @@ namespace pleb
 		template<typename T = std::any>
 		request(
 			client_ref       client,
-			resource_ref     target,
+			pleb::topic      topic,
 			pleb::method     method,
 			T              &&value     = {},
 			flags::filtering filtering = flags::default_message_filtering,
 			flags::handling  handling  = flags::no_special_handling)
 			:
-			message(std::move(target), code_t(method.code),
+			message(std::move(topic), code_t(method.code),
 				std::forward<T>(value), filtering, handling),
 			_client(client)
 			{}
@@ -116,7 +116,7 @@ namespace pleb
 		void respond(status status, T &&value = {})
 		{
 			features = features | flags::did_respond;
-			if (_client) _client->respond(resource, status, std::move(value));
+			if (_client) _client->respond(topic, status, std::move(value));
 		}
 
 
@@ -150,16 +150,16 @@ namespace pleb
 	class service : public receiver
 	{
 	public:
-		const resource_ptr resource;
+		const resource_node_ptr resource;
 
 	private:
-		friend class resource;
+		friend class topic;
 		const service_function func;
 
 
 	public:
 		service(
-			resource_ptr       resource,
+			resource_node_ptr  resource,
 			service_function &&func,
 			flags::filtering   ignored = flags::default_service_ignore,
 			flags::handling    handling = flags::no_special_handling);
@@ -180,11 +180,11 @@ namespace pleb
 		*/
 		template<typename T = std::any>
 		auto_request(
-			resource_ref   target,
+			pleb::topic    topic,
 			pleb::method   method,
 			T            &&value = {})
 			:
-			request(nullptr, std::move(target), method, std::forward<T>(value)) {}
+			request(nullptr, std::move(topic), method, std::forward<T>(value)) {}
 
 		/*
 			1: if auto_request is discarded without being issued,
