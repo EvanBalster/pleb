@@ -181,18 +181,18 @@ namespace pleb
 		The topic class exists in two variants with the same API and behavior.
 			These are interchangeable and differ only in performance.
 
-		topic     -- references the resource, which is created if it does not exist.
-		topic_ref -- references the nearest resource, holding any leftover path as a string.
+		topic      -- points directly to the resource, which is created if it does not exist.
+		topic_path -- points to the nearest resource, holding any leftover path as a string.
 
 		"topic" is the right choice in most cases and is cheaper to pass around.
-		"topic_ref" is used in messages and is preferred when the resource path includes trailing
+		"topic_path" is used in messages and is preferred when the resource path includes trailing
 			elements (IDs, keys, etc) which don't directly correspond to services or subscribers.
 	*/
 	template<class SubPath> class topic_;
 
-	using topic     = topic_<void>;
+	using topic      = topic_<void>;
 
-	using topic_ref = topic_<std::string>;
+	using topic_path = topic_<std::string>;
 
 
 	// Internal datamodel for the topic classes.
@@ -283,9 +283,9 @@ namespace pleb
 	public:
 		using base_t = topic_base_<SubPath>;
 
-		static constexpr bool supports_unresolved_subpath = !std::is_same_v<SubPath, void>;
+		static constexpr bool type_is_topic_path = std::is_same_v<SubPath, std::string>;
 
-		using other_topic_t = std::conditional_t<supports_unresolved_subpath, topic_<void>, topic_<std::string>>;
+		using other_topic_t = std::conditional_t<type_is_topic_path, topic, topic_path>;
 
 		static_assert(std::is_same_v<SubPath,void> || std::is_same_v<SubPath,std::string>,
 			"topic_base_ must use void or std::string as a template parameter.");
@@ -330,7 +330,7 @@ namespace pleb
 		topic_(const char*        topic)                            : base_t(std::string_view(topic)) {}
 
 
-		// Convert between topic and topic_ref.
+		// Convert between topic and topic_path.
 		topic_(const other_topic_t &other)               : base_t(other) {}
 		topic_(other_topic_t &&other)                    : base_t(std::move(other)) {}
 		topic_& operator=(const other_topic_t &other)    {static_cast<base_t&>(*this) = other;}
@@ -360,17 +360,16 @@ namespace pleb
 
 
 		/*
-			Make this topic refer to a resource more directly.
-				These methods won't affect behavior of this class, but can
-				speed up sending messages via topic_ref.
-			
-			realize() creates any missing resource nodes; resolve() does not.
-		*/
-		topic_                  &resolve() noexcept    {_resolve(); return *this;}
-		const resource_node_ptr &realize()             {return _realize();}
+			Optimization methods for topic_path:
+				Resolve to the most specific existing resource.
+				These methods won't affect behavior of this class,
+				but may avoid repetitive resolve operations when sending messages.
 
-		topic_                   resolved() const      {auto copy = *this; copy._resolve(); return copy;}
-		resource_node_ptr        realized() const      {return _realize();}
+			These methods may be called on topic but do nothing.
+			The resource can be forced into existence by converting topic_path to topic.
+		*/
+		topic_& resolve() noexcept    {_resolve(); return *this;}
+		topic_  resolved() const      {auto copy = *this; copy._resolve(); return copy;}
 
 
 		/*

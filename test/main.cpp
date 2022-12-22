@@ -144,14 +144,14 @@ int main(int argc, char **argv)
 
 	for (auto str : test_strings)
 	{
-		pleb::topic_ref topic_ref_un = str;
-		pleb::topic     topic_exact = str;
-		pleb::topic_ref topic_ref_re = str;
+		pleb::topic_path topic_path_pre = str;
+		pleb::topic      topic_exact = str;
+		pleb::topic_path topic_path_post = str;
 
 		std::cout << "\tPath: `" << str << "':" << std::endl;
-		std::cout << "\ttopic_ref: `" << topic_ref_un.path() << "':" << std::endl;
-		std::cout << "\ttopic: `" << topic_exact.path() << "':" << std::endl;
-		std::cout << "\ttopic_ref: `" << topic_ref_re.path() << "':" << std::endl;
+		std::cout << "\ttopic_path pre: `" << topic_path_pre.path() << "':" << std::endl;
+		std::cout << "\ttopic realized: `" << topic_exact.path() << "':" << std::endl;
+		std::cout << "\ttopic_path post:`" << topic_path_post.path() << "':" << std::endl;
 		for (auto part : pleb::topic_view(str))
 		{
 			std::cout << "\t\t* `" << part << "'" << std::endl;

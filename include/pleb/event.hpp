@@ -33,13 +33,13 @@ namespace pleb
 	public:
 		template<typename T = std::any>
 		event(
-			pleb::topic          topic,
-			pleb::status         status,
-			T                  &&value     = {},
-			flags::filtering     filtering = flags::default_message_filtering,
-			flags::handling      handling  = flags::no_special_handling)
+			const topic_path &topic,
+			pleb::status      status,
+			T               &&value     = {},
+			flags::filtering  filtering = flags::default_message_filtering,
+			flags::handling   handling  = flags::no_special_handling)
 			:
-			message(std::move(topic), code_t(status.code),
+			message(topic, code_t(status.code),
 				std::forward<T>(value), filtering, handling)
 			{}
 

@@ -11,7 +11,7 @@
 namespace coop {template<class T> class trie_;}
 
 /*
-	Base class for topic trie.
+	Base class for resource trie.
 */
 
 namespace pleb

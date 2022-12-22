@@ -26,8 +26,8 @@ namespace pleb
 		flags::filtering filtering;    // Affects visibility of message
 		flags::handling  requirements; // Required properties of handler
 
-		// The resource which the message concerns.
-		topic            topic;
+		// The topic of the message, which resembles a pathname.
+		topic_path       topic;
 
 
 	public:
@@ -39,12 +39,12 @@ namespace pleb
 
 	public:
 		message_base(
-			pleb::topic      _topic,
-			uint32_t         _code,
-			flags::filtering _filtering,
-			flags::handling  _requirements)
+			const topic_path &_topic,
+			uint32_t          _code,
+			flags::filtering  _filtering,
+			flags::handling   _requirements)
 			:
-			topic(std::move(_topic)), code(_code), features(flags::no_features),
+			topic(_topic), code(_code), features(flags::no_features),
 			filtering(_filtering), requirements(_requirements)
 			{}
 	};
@@ -58,13 +58,13 @@ namespace pleb
 		static const size_t BASE_SIZE = sizeof(message_base);
 
 		message(
-			pleb::topic       topic,
+			const topic_path &topic,
 			code_t            code,
 			std::any        &&value,
 			flags::filtering  filtering,
-			flags::handling   requirements)
+			flags::handling    requirements)
 			:
-			message_base(std::move(topic), code, filtering, requirements),
+			message_base(topic, code, filtering, requirements),
 			content(std::move(value)) {}
 
 

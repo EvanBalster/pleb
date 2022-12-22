@@ -14,7 +14,7 @@ namespace pleb
 
 #define PLEV_MESSAGE_VERB(METHOD_NAME) \
 	template<typename... Args, typename Valid = std::void_t<decltype(pleb::topic().METHOD_NAME(std::declval<Args>()...))>> \
-	auto METHOD_NAME(const pleb::topic_ref &topic, Args&& ... args) {\
+	auto METHOD_NAME(const pleb::topic_path &topic, Args&& ... args) {\
 		return topic.METHOD_NAME(std::forward<Args>(args)...);}
 
 	PLEB_RESOURCE_VERB(subscribe)

@@ -58,12 +58,12 @@ namespace pleb
 		*/
 		template<typename T = std::any>
 		request(
-			client_ref       client,
-			pleb::topic      topic,
-			pleb::method     method,
-			T              &&value     = {},
-			flags::filtering filtering = flags::default_message_filtering,
-			flags::handling  handling  = flags::no_special_handling)
+			client_ref        client,
+			const topic_path &topic,
+			pleb::method      method,
+			T               &&value     = {},
+			flags::filtering  filtering = flags::default_message_filtering,
+			flags::handling   handling  = flags::no_special_handling)
 			:
 			message(std::move(topic), code_t(method.code),
 				std::forward<T>(value), filtering, handling),

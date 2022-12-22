@@ -37,11 +37,11 @@ namespace pleb
 	public:
 		template<typename T = std::any>
 		response(
-			pleb::topic      topic, // Topic of the request (also provides handling rules)
-			pleb::status     status,
-			T              &&value     = {},
-			flags::filtering filtering = flags::default_message_filtering,
-			flags::handling  handling  = flags::no_special_handling)
+			const topic_path &topic, // Topic of the request (also provides handling rules)
+			pleb::status      status,
+			T               &&value     = {},
+			flags::filtering  filtering = flags::default_message_filtering,
+			flags::handling   handling  = flags::no_special_handling)
 			:
 			message(std::move(topic), code_t(status.code),
 				std::forward<T>(value), filtering, handling)
