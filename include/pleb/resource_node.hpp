@@ -54,7 +54,7 @@ namespace pleb
 
 	private:
 		// This class is intended for use only as a base class of topic.
-		friend class topic;
+		template<class P> friend class topic_;
 		friend class coop::trie_<resource_data>;
 		resource_data() {}
 

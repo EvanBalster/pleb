@@ -1,26 +1,32 @@
 #pragma once
 
 
+#include "bind.hpp"
 #include "topic_impl.hpp"
 
 
 namespace pleb
 {
 #define PLEB_RESOURCE_VERB(METHOD_NAME) \
-	template<typename... Args> \
+	template<typename... Args, typename Valid = std::void_t<decltype(pleb::topic().METHOD_NAME(std::declval<Args>()...))>> \
 	auto METHOD_NAME(pleb::topic topic, Args&& ... args) {\
 		return topic.METHOD_NAME(std::forward<Args>(args)...);}
 
+#define PLEV_MESSAGE_VERB(METHOD_NAME) \
+	template<typename... Args, typename Valid = std::void_t<decltype(pleb::topic().METHOD_NAME(std::declval<Args>()...))>> \
+	auto METHOD_NAME(const pleb::topic_ref &topic, Args&& ... args) {\
+		return topic.METHOD_NAME(std::forward<Args>(args)...);}
+
 	PLEB_RESOURCE_VERB(subscribe)
-	PLEB_RESOURCE_VERB(publish)
+	PLEV_MESSAGE_VERB(publish)
 
 	PLEB_RESOURCE_VERB(serve)
 
-	PLEB_RESOURCE_VERB(GET)
-	PLEB_RESOURCE_VERB(PUT)
-	PLEB_RESOURCE_VERB(POST)
-	PLEB_RESOURCE_VERB(PATCH)
-	PLEB_RESOURCE_VERB(DELETE)
+	PLEV_MESSAGE_VERB(GET)
+	PLEV_MESSAGE_VERB(PUT)
+	PLEV_MESSAGE_VERB(POST)
+	PLEV_MESSAGE_VERB(PATCH)
+	PLEV_MESSAGE_VERB(DELETE)
 
 #undef PLEB_RESOURCE_VERB
 

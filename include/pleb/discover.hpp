@@ -18,9 +18,9 @@ namespace pleb
 	namespace detail
 	{
 		template<class Callback, class ScanResult>
-		subscription_ptr scan_subscribe(flags::filtering select, Callback callback, resource_ptr root, flags::handling handling)
+		subscription_ptr discover_subscribe(flags::filtering select, Callback callback, topic root, flags::handling handling)
 		{
-			return root->subscribe([callback = std::move(callback), select](const pleb::event &event)
+			return root.subscribe([callback = std::move(callback), select](const pleb::event &event)
 			{
 				if (event.filtering & select)
 					if (auto *ptr = event.value_cast<ScanResult>())
@@ -31,10 +31,10 @@ namespace pleb
 	}
 
 	/*
-		scan_services and scan_subscriptions invoke the provided functor once for
-			each existing service/subscription and afterwards will be invoked
-			whenever a new one is created until the scan subscription is released.
-			These calls will arrive from whatever thread creates the service/subscription
+		These methods invoke the provided functor once for each existing service/subscription
+			and afterwards will be invoked whenever a new one is created until the discovery
+			subscription itself is released.
+			Calls will arrive from various threads as these 
 
 		callback -- copyable functor capable of receiving service_ptr or subscription_ptr.
 		root     -- the root resource to monitor, defaulting to PLEB's global root.
@@ -52,23 +52,23 @@ namespace pleb
 			may result in deadlock.  This restriction will be lifted at a later time.
 	*/
 	template<class Callback,            std::enable_if_t<std::is_invocable<Callback, service_ptr>::value,int> Dummy = 0>
-	subscription_ptr scan_services(
+	subscription_ptr discover_services(
 		Callback        callback,
 		topic           root     = topic::root(),
 		flags::handling handling = flags::no_special_handling)
 	{
-		auto watch = detail::scan_subscribe<Callback, service_ptr>(flags::service_status, callback, root, handling);
+		auto watch = detail::discover_subscribe<Callback, service_ptr>(flags::service_status, callback, root, handling);
 		root->visit_services     ([&](service_ptr      svc) {callback(svc);});
 		return watch;
 	}
 
 	template<class Callback,            std::enable_if_t<std::is_invocable_v<Callback, subscription_ptr>,int> Dummy = 0>
-	subscription_ptr scan_subscriptions(
+	subscription_ptr discover_subscriptions(
 		Callback        callback,
 		topic           root     = topic::root(),
 		flags::handling handling = flags::no_special_handling)
 	{
-		auto watch = detail::scan_subscribe<Callback, subscription_ptr>(flags::subscription_status, callback, root, handling);
+		auto watch = detail::discover_subscribe<Callback, subscription_ptr>(flags::subscription_status, callback, root, handling);
 		root->visit_subscriptions([&](subscription_ptr sub) {callback(sub);});
 		return watch;
 	}

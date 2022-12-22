@@ -69,7 +69,7 @@ namespace pleb
 		const resource_node_ptr resource;
 
 	private:
-		friend class topic;
+		template<class P> friend class topic_;
 		const subscriber_function func;
 
 

@@ -29,58 +29,66 @@
 namespace pleb
 {
 
-	inline resource_node_ptr topic::root_node() noexcept
+	inline resource_node_ptr global_root_resource() noexcept
 	{
 		static resource_node_ptr root = resource_node::create("[root]"); return root;
 	}
 
-	std::string topic::_resolve(topic_view subpath)
+
+	inline void topic_base_<void>::_push(topic_view subpath)
 	{
-		std::string result;
-		if (!_base) _base = root_node();
-		for (auto part : subpath)
+		for (auto part : subpath) _node = _node->get_child(part);
+	}
+
+	inline void topic_base_<void>::_pop() noexcept
+	{
+		_node = _node->parent();
+	}
+
+	inline void topic_base_<std::string>::_push(topic_view addition)
+	{
+		for (auto part : addition)
 		{
-			auto child = _base->try_child(part);
-			if (!child)
-			{
-				result = subpath.string.substr(part.data()-subpath.string.data());
-				break;
-			}
-			_base = std::move(child);
+			if (_subpath.length()) _subpath.push_back('/');
+			_subpath.append(part.data(), part.length());
 		}
-		return result;
 	}
 
-	void topic::_realize(topic_view subpath)
-	{
-		if (!_base) _base = root_node();
-		for (auto part : subpath) _base = _base->get_child(part);
-	}
-
-	inline topic topic::operator/(topic_view subpath) const
-	{
-		// TODO possible optimizations here
-		if (_subpath.length()) return topic(_base, _subpath+"/"+std::string(subpath.string));
-		else                   return topic(_base, _subpath);
-	}
-
-	inline topic topic::parent() const
+	inline void topic_base_<std::string>::_pop() noexcept
 	{
 		if (_subpath.length())
-			return topic(_base, topic_view(_subpath).parent());
-		else
-			return topic(_base->parent());
+		{
+			auto parent = topic_view(_subpath).parent();
+			_subpath.assign(parent.data(), parent.length());
+		}
+		else _nearest = _nearest->parent();
 	}
 
-	inline void topic::set_to_parent() noexcept
+	inline std::string_view topic_base_<void>::_back() const noexcept
 	{
-		if (_subpath.length()) _subpath = topic_view(_subpath).parent();
-		else                   _base = _base->parent();
+		return _node->id();
 	}
-
-	inline std::string_view topic::id() const noexcept
+	inline std::string_view topic_base_<std::string>::_back() const noexcept
 	{
 		if (_subpath.length()) return topic_view(_subpath).last_id();
+		else                   return _nearest->id();
+	}
+
+
+	inline std::string topic_base_<std::string>::_resolve_with(std::string_view subpath) noexcept
+	{
+		std::string unresolved;
+		for (auto part : topic_view(subpath))
+		{
+			if (auto child = _nearest->try_child(part)) _nearest = std::move(child);
+			else {unresolved = subpath.substr(part.data()-subpath.data()); break;}
+		}
+		return unresolved;
+	}
+	inline const resource_node_ptr &topic_base_<std::string>::_realize()
+	{
+		for (auto part : topic_view(_subpath)) _nearest = _nearest->get_child(part);
+		_subpath.clear();
 	}
 
 	/*inline std::array<std::string_view, 2> topic::path_view() const noexcept
@@ -88,28 +96,35 @@ namespace pleb
 		return {_base->path(), 
 	}*/
 
-	inline std::string topic::path() const
+	inline std::string topic_base_<void>::_path() const
 	{
-		std::string result = _base->path();
+		return _node->path();
+	}
+
+	inline std::string topic_base_<std::string>::_path() const
+	{
+		std::string result = _nearest->path();
 		if (_subpath.length())
 		{
-			result.push_back('/');
+			if (result.length()) result.push_back('/');
 			result.append(_subpath);
 		}
 		return result;
 	}
 	
-	inline [[nodiscard]] std::shared_ptr<subscription> topic::subscribe(
+	template<typename P> [[nodiscard]]
+	std::shared_ptr<subscription> topic_<P>::subscribe(
 		subscriber_function &&f,
 		flags::filtering      ignore_flags,
 		flags::handling       handling)
 	{
-		_realize();
-		return _base->emplace_subscriber(_base, std::move(f));
+		auto &node = _realize();
+		return node->emplace_subscriber(node, std::move(f)); // TODO ignore_flags, handling
 	}
 
+	template<typename P>
 	template<class T> [[nodiscard]]
-	inline std::shared_ptr<subscription> topic::subscribe(
+	inline std::shared_ptr<subscription> topic_<P>::subscribe(
 		std::weak_ptr<T> handler_object,
 		void        (T::*handler_method)(const pleb::event&),
 		flags::filtering ignore_flags,
@@ -121,24 +136,26 @@ namespace pleb
 		}, ignore_flags, handling);
 	}
 
+	template<typename P>
 	template<typename T>
-	void topic::publish(
+	void topic_<P>::publish(
 		status           status,
 		T              &&item,
 		flags::filtering filtering,
-		flags::handling  handling)
+		flags::handling  handling) const
 	{
 		pleb::event e(*this, status, std::forward<T>(item), filtering, handling);
 		publish(e);
 	}
 
-	[[nodiscard]] inline
-	std::shared_ptr<service> topic::serve(service_function &&function) noexcept
+	template<typename P> [[nodiscard]]
+	std::shared_ptr<service> topic_<P>::serve(service_function &&function) noexcept
 	{
-		_realize();
-		return _base->try_emplace_service(_base, std::move(function));
+		auto &node = _realize();
+		return node->try_emplace_service(node, std::move(function));
 	}
 
+#if 0
 	template<class T> [[nodiscard]]
 	std::shared_ptr<service> topic::serve(
 		std::weak_ptr<T> svc_object,
@@ -176,65 +193,76 @@ namespace pleb
 			else r.respond_Gone();
 		});
 	}
+#endif
 
+	template<typename P>
 	template<class V>
-	void topic::request(client_ref client, method method, V &&value)
+	void topic_<P>::request(client_ref client, method method, V &&value) const
 	{
 		pleb::request r(std::move(client), *this, method, std::forward<V>(value));
 		issue(r);
 	}
 
+	template<typename P>
 	template<class V>
-	auto_request topic::request(method method, V &&value)
+	auto_request topic_<P>::request(method method, V &&value) const
 	{
 		return auto_request(*this, method, std::forward<V>(value));
 	}
+	template<typename P>
 	template<class V>
-	auto_retrieve topic::retrieve(method method, V &&value)
+	auto_retrieve topic_<P>::retrieve(method method, V &&value) const
 	{
 		return auto_retrieve(*this, method, std::forward<V>(value));
 	}
 
-	inline           auto_retrieve topic::GET   ()             {return retrieve(method::GET);}
-	template<class V> auto_request topic::PUT   (V &&value)    {return request(method::PUT,   std::forward<V>(value));}
-	template<class V> auto_request topic::POST  (V &&value)    {return request(method::POST,  std::forward<V>(value));}
-	template<class V> auto_request topic::PATCH (V &&value)    {return request(method::PATCH, std::forward<V>(value));}
-	inline            auto_request topic::DELETE()             {return request(method::DELETE);}
+	template<typename P>
+	/* */            auto_retrieve topic_<P>::GET   ()          const    {return retrieve(method::GET);}
+	template<typename P>
+	template<class V> auto_request topic_<P>::PUT   (V &&value) const    {return request(method::PUT,   std::forward<V>(value));}
+	template<typename P>
+	template<class V> auto_request topic_<P>::POST  (V &&value) const    {return request(method::POST,  std::forward<V>(value));}
+	template<typename P>
+	template<class V> auto_request topic_<P>::PATCH (V &&value) const    {return request(method::PATCH, std::forward<V>(value));}
+	template<typename P>
+	/* */             auto_request topic_<P>::DELETE()          const    {return request(method::DELETE);}
 
-	inline void topic::issue(pleb::request &msg)
+	template<typename P>
+	void topic_<P>::issue(pleb::request &msg) const
 	{
-		_resolve();
+		const topic_<P>  &target = base_t::_resolve();
+		resource_node_ptr node   = target._nearest_node();
 
+		// Mark the message as unresponded.
 		msg.features &= ~flags::did_respond;
 
-		auto svc = _base->service_lock();
-		if (svc)
-			if (svc->accepts(msg.filtering & ~flags::recursive))
-				goto service_found;
-			
-		if (msg.recursive()) // Propagate up the chain.
-			for (resource_node_ptr node = _base->parent(); node; node = node->parent())
-				if (svc = node->service_lock())
-					if (svc->accepts(msg.filtering | flags::recursive))
-						goto service_found;
+		const bool recursive = msg.recursive();
+		auto filtering = msg.filtering & ~flags::recursive;
 
-	//service_not_found:
-		throw service_not_found("No service available", path());
-		return;
+		if (target._is_resolved()) goto start_resolved;
 
-	service_found:
-		try
+		while (recursive && node)
 		{
-			svc->func(msg);
+			filtering |= flags::recursive;
+
+		start_resolved:
+			if (auto svc = node->service_lock()) if (svc->accepts(filtering))
+			{
+				try                            {svc->func(msg);}
+				catch (status s)               {msg.respond(s);}
+				catch (status_exception &e)    {msg.respond(e.status);}
+
+				// Default response if service did not respond or move message.
+				if (!(msg.features & flags::did_respond)) msg.respond(statuses::NoContent);
+				
+				msg.features |= flags::did_send;
+				return;
+			}
+
+			node = node->parent();
 		}
-		catch (status s)               {msg.respond(s);}
-		catch (status_exception &e)    {msg.respond(e.status);}
 
-		// Default response if service did not respond or move message.
-		if (!(msg.features & flags::did_respond))
-			msg.respond(statuses::NoContent);
-
-		msg.features |= flags::did_send;
+		throw service_not_found("No service available", path());
 	}
 
 	/*
@@ -242,38 +270,52 @@ namespace pleb
 			pleb::event usually calls this method upon construction;
 			it can be used to publish the same event repeatedly.
 	*/
-	inline void topic::publish(const pleb::event &msg)
+	template<typename P>
+	void topic_<P>::publish(const pleb::event &msg) const
 	{
-		_resolve();
+		const topic_<P>  &target = base_t::_resolve();
+		resource_node_ptr node   = target._nearest_node();
 
 		const bool recursive = msg.recursive();
 		auto filtering = msg.filtering & ~flags::recursive;
-		for (resource_node_ptr node = _base; node; node = node->parent())
+		
+		if (target._is_resolved()) goto start_resolved;
+
+		while (recursive && node)
 		{
+			filtering |= flags::recursive;
+
+		start_resolved:
 			for (subscription &sub : node->subscribers()) if (sub.accepts(filtering))
 			{
-				try {sub.func(msg);}
-				catch (...)
-				{
-					auto exception = std::current_exception();
-					if (msg.filtering & flags::subscriber_exception)
-					{
-						// Throw exception handler exceptions to the parent.
-						if (resource_node_ptr parent = node->parent())
-							topic(parent).publish(statuses::InternalServerError, exception,
-								flags::subscriber_exception | flags::recursive,
-								msg.requirements);
-					}
-					else
-						topic(node).publish(statuses::InternalServerError, exception,
-							flags::subscriber_exception | flags::recursive,
-							msg.requirements);
-					// TODO what if nobody handled the exception??  Unsafe to proceed?
-				}
+				try            {sub.func(msg);}
+				catch (...)    {_publish_exception(msg, sub, std::current_exception());}
 			}
-			if (!recursive) break;
-			filtering |= flags::recursive;
+
+			node = node->parent();
 		}
+	}
+
+	template<typename P>
+	void topic_<P>::_publish_exception(
+		const pleb::event  &msg,
+		const subscription &sub,
+		std::exception_ptr  exception) const
+	{
+		auto node = sub.resource;
+
+		if (msg.filtering & flags::subscriber_exception)
+		{
+			// If an exception subscriber throws an exception, publish to the parent instead.
+			if (resource_node_ptr parent = node->parent())
+				topic(parent).publish(statuses::InternalServerError, exception,
+					flags::subscriber_exception | flags::recursive, msg.requirements);
+		}
+		else
+			topic(node).publish(statuses::InternalServerError, exception,
+				flags::subscriber_exception, msg.requirements);
+
+		// TODO what if nobody handled the exception??  Unsafe to proceed?
 	}
 
 
@@ -296,8 +338,9 @@ namespace pleb
 			if the callback attempts to modify the resources it is traversing.
 			Avoid performing complex actions within the callback.
 	*/
+	template<typename P>
 	template<typename Callback, std::enable_if_t<std::is_invocable_v<Callback, const resource_node_ptr&>, int>>
-	void topic::visit_resources(const Callback &callback, size_t recursion_depth, bool skip_this)
+	void topic_<P>::visit_resources(const Callback &callback, size_t recursion_depth, bool skip_this) const
 	{
 		_realize();
 		if (_subpath.length()) return;
@@ -310,15 +353,17 @@ namespace pleb
 		};
 		if (recursion_depth--) _base->visit_children(scan);
 	}
+	template<typename P>
 	template<typename Callback, std::enable_if_t<std::is_invocable_v<Callback, service_ptr>, int>>
-	void topic::visit_services(const Callback &callback, size_t recursion_depth)
+	void topic_<P>::visit_services(const Callback &callback, size_t recursion_depth) const
 	{
 		visit_resources([&](const FIXME_ptr &rc)
 			{if (auto svc=rc->service_lock()) callback(std::move(svc));},
 			recursion_depth);
 	}
+	template<typename P>
 	template<typename Callback, std::enable_if_t<std::is_invocable_v<Callback, subscription_ptr>, int>>
-	void topic::visit_subscriptions(const Callback &callback, size_t recursion_depth)
+	void topic_<P>::visit_subscriptions(const Callback &callback, size_t recursion_depth) const
 	{
 		visit_resources([&](const FIXME_ptr &rc)
 			{for (auto i=rc->begin(),e=rc->end(); i!=e; ++i) callback(i);},

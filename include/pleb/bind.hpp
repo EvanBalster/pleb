@@ -27,8 +27,6 @@
 
 namespace pleb
 {
-	
-
 	/*
 		Implement a single service method using a method of some class.
 			This is commonly used for GET and POST.
@@ -67,9 +65,10 @@ namespace pleb
 		status           default_response_status = statuses::NoContent);
 
 	// Allow the above methods to be called with a shared_ptr.
-	template<class T, typename ... Args>
+	template<class T, typename ... Args,    typename Valid = std::void_t<decltype(bind_service(std::weak_ptr<T>(), std::declval<Args>()...))>>
 	inline auto bind_service(const std::shared_ptr<T> &class_instance, Args&& ... other_args)
 	{
+		// A compile
 		return bind_service(std::weak_ptr(class_instance), std::forward<Args>(other_args)...);
 	}
 
@@ -78,7 +77,7 @@ namespace pleb
 	namespace detail
 	{
 		// Helper method for implementing OPTIONS
-		void respond_to_misc_method(pleb::request &r, method_set allowed)
+		void respond_to_misc_method(request &r, method_set allowed)
 		{
 			switch (r.method())
 			{
@@ -92,7 +91,7 @@ namespace pleb
 
 		template<typename T>
 		std::shared_ptr<T> svc_lock_(
-			std::weak_ptr<T> w, pleb::request &r, method_set implemented)
+			std::weak_ptr<T> w, request &r, method_set implemented)
 		{
 			auto s = w.lock();
 			if (!s) r.respond_Gone();
@@ -102,6 +101,15 @@ namespace pleb
 				s.reset();
 			}
 			return s;
+		}
+
+		template<typename ResponseValue>
+		void respond_with(pleb::request &r, ResponseValue &&v, status default_status)
+		{
+			using type = std::decay_t<ResponseValue>;
+			if      constexpr (std::is_same_v<type, status  >) r.respond(v);
+			else if constexpr (std::is_same_v<type, response>) r.respond(v.status(), std::move(v.value()));
+			else                                               r.respond(default_status, std::forward<ResponseValue>(v));
 		}
 	}
 
@@ -124,7 +132,7 @@ namespace pleb
 				// Call the served method.
 				Return v = (s.get()->*class_method) (detail::msg_decompose<Params>::pass(request)...);
 				issuing_response = true;
-				detail::respond_with<Return>::respond(request, v, default_response_status);
+				detail::respond_with(request, std::forward<Return>(v), default_response_status);
 			}
 			catch (std::bad_any_cast&)
 			{
@@ -177,7 +185,7 @@ namespace pleb
 				// Call the served method.
 				Return v = (s.get()->*class_method) (request);
 				issuing_response = true;
-				detail::respond_with<Return>::respond(request, v, default_response_status);
+				detail::respond_with(request, std::forward<Return>(v), default_response_status);
 			}
 			catch (std::bad_any_cast&)
 			{

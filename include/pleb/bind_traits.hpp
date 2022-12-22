@@ -58,22 +58,6 @@ namespace pleb
 			{return msg_decompose<T>::pass(m);}
 
 
-		template<typename T, typename enable = void>
-		struct respond_with
-			{static void respond(request &r, T t, status default_status)    {r.respond(default_status, t);}};
-
-		template<>
-		struct respond_with<void, void> {};
-
-		template<>
-		struct respond_with<status, void>
-			{static void respond(request &r, status x, status default_status)    {r.respond(x);}};
-
-		template<>
-		struct respond_with<response, void>
-			{static void respond(request &r, response x, status default_status)    {r.respond(x.status(), std::move(x.value()));}};
-
-
 
 		template<typename Message, typename StdFunctionForCallable>
 		struct valid_handler_impl

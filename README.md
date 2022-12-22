@@ -11,11 +11,17 @@ PLEB's design is based on the following observations:
 
 PLEB does not replace messaging frameworks like ZeroMQ and NNG; rather, it can act as a front-end.  Where traditional frameworks treat in-process communication as a special case of network sockets, PLEB allows us to do the opposite by using local resources as an interface to remote ones.
 
-Resources have path-like names such as `output/1` .  PLEB messages are realized as function calls using `std::any` as a generic container.  PLEB is multi-threaded and (mostly*) wait-free, meaning it can be used for extremely time-sensitive concurrent applications.  While PLEB is thread-safe for purposes of setting up the resource tree and issuing messages, it imposes no locks or message queueing — the application is expected to impose its own concurrency measures.
+PLEB messages are realized as function calls using `std::any` as a generic container.  PLEB is multi-threaded and (mostly*) wait-free, meaning it can be used for extremely time-sensitive concurrent applications.  While PLEB is thread-safe for purposes of setting up the resource tree and issuing messages, it imposes no locks or message queueing — the application is expected to impose its own concurrency measures.
 
 (* PLEB's resource tree uses locking operations when adding resources or looking them up, pending the integration of a suitable wait-free hash table algorithm,)
 
+## The Resource Tree
 
+Resources have path-like names such as `output/1`.  Internally, services and subscribers are registered with nodes in a concurrent tree of resources resembling a directory structure.  Resource paths are delimited by one or more foreslash `/` characters.  This means, for example, that a URL `https://example.com/1/2/3` would refer to a resource `http:` > `example.com` > `1` > `2` > `3`.
+
+The resource tree uses a "reverse ownership" idiom to manage its data structures.
+
+Resource nodes are not explicitly created or destroyed and will exist as long as they are referenced, including by services, subscribers or child resources.  PLEB achieves this through a reverse-ownership idiom described in the `coop` headers.
 
 ## Quick  Examples
 

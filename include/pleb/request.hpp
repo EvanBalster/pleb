@@ -153,7 +153,7 @@ namespace pleb
 		const resource_node_ptr resource;
 
 	private:
-		friend class topic;
+		template<class P> friend class topic_;
 		const service_function func;
 
 
