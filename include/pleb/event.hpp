@@ -49,8 +49,7 @@ namespace pleb
 
 
 		// Publish this event.  This may be done repeatedly.
-		//    This function is defined in resource.h
-		void publish();
+		void publish()                    {topic.publish(*this); features |= flags::did_send;}
 	};
 
 
@@ -66,7 +65,8 @@ namespace pleb
 	class subscription : public receiver
 	{
 	public:
-		const resource_node_ptr resource;
+		const pleb::topic topic;
+
 
 	private:
 		template<class P> friend class topic_;
@@ -75,10 +75,15 @@ namespace pleb
 
 	public:
 		subscription(
-			resource_node_ptr     resource,
-			subscriber_function &&func,
+			const pleb::topic    &_topic,
+			subscriber_function &&_func,
 			flags::filtering      ignored = flags::default_subscriber_ignore,
-			flags::handling       handling = flags::no_special_handling);
-		~subscription();
+			flags::handling       handling = flags::no_special_handling)
+			:
+			receiver(ignored, handling), topic(_topic), func(std::move(_func))
+		{
+			topic.publish(statuses::Created, this,
+				flags::subscription_status | flags::recursive);
+		}
 	};
 }

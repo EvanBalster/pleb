@@ -4,6 +4,7 @@
 #include <string_view>
 #include <type_traits>
 #include <functional>
+#include <iosfwd>
 
 #include "flags.hpp"
 #include "method.hpp"
@@ -178,6 +179,30 @@ namespace pleb
 
 
 	/*
+		This exception may be thrown when using a null-valued pleb::topic
+			to send a message, set up a receiver or convert to topic_path.
+	*/
+	class null_topic_error : public detail::topic_runtime_error
+	{
+	public:
+		using detail::topic_runtime_error::topic_runtime_error;
+
+		static const resource_node_ptr &check(
+			const resource_node_ptr &p,
+			const char *preamble = "null topic not allowed",
+			const char *topic_name = "(null resource_node_ptr)")
+		{
+			if (!p) throw null_topic_error(preamble, topic_name);
+			return p;
+		}
+	};
+
+
+
+	// Tag type used to distinguish topic_path from topic below.
+	struct lazy_path {};
+
+	/*
 		The topic class exists in two variants with the same API and behavior.
 			These are interchangeable and differ only in performance.
 
@@ -192,84 +217,95 @@ namespace pleb
 
 	using topic      = topic_<void>;
 
-	using topic_path = topic_<std::string>;
+	using topic_path = topic_<lazy_path>;
 
 
 	// Internal datamodel for the topic classes.
 	template<class SubPath>
 	class topic_base_
 	{
-		static_assert(std::is_same_v<SubPath,void> || std::is_same_v<SubPath,std::string>,
-			"topic_base_ must use void or std::string as a template parameter.");
+		static_assert(std::is_same_v<SubPath,void> || std::is_same_v<SubPath,lazy_path>,
+			"topic_base_ must use void or pleb::lazy_path as a template parameter.");
 	};
 	template<> class topic_base_<void>
 	{
 	public:
-		topic_base_()  : _node(global_root_resource()) {}
+		topic_base_()  : _node(nullptr) {}
 		~topic_base_() = default;
 
-		topic_base_(const resource_node_ptr &node)                              : _node(node ? node : global_root_resource()) {}
-		topic_base_(const resource_node_ptr &node, std::string_view subpath)    : _node(node ? node : global_root_resource()) {_push(subpath);}
-		topic_base_(                               std::string_view    path)    : _node(global_root_resource())               {_push(   path);}
+		topic_base_(                               std::string_view    path) noexcept    : _node(global_root_resource()) {_push(   path);}
+
+		explicit operator bool() const noexcept    {return bool(_node);}
+
+		bool operator==(const topic_base_ &other) const noexcept    {return _node == other._node;}
+		bool operator!=(const topic_base_ &other) const noexcept    {return _node == other._node;}
 
 
 	protected:
+		topic_base_(const resource_node_ptr &node)                           noexcept    : _node(node)                   {}
+		topic_base_(const resource_node_ptr &node, std::string_view subpath) noexcept    : _node(node)                   {_push(subpath);}
+
 		template<class P> friend class topic_base_;
+		template<class P> friend class topic_; // visit_subscriptions
 		resource_node_ptr _node; // Never null.
 
 	protected:
-		constexpr bool             _is_resolved() const    {return true;}
-		constexpr std::string_view _unresolved()  const    {return std::string_view();}
-		const resource_node_ptr   &_nearest_node() const    {return _node;}
+		constexpr bool             _is_resolved () const noexcept    {return true;}
+		bool                       _is_null     () const noexcept    {return !_node;}
+		constexpr std::string_view _unresolved  () const noexcept    {return std::string_view();}
+		const resource_node_ptr   &_nearest_node() const noexcept    {return _node;}
 
 		const topic_base_&         _resolve()     const    {return *this;}
 		topic_base_&               _resolve()              {return *this;}
 		const resource_node_ptr   &_realize()     const    {return _node;}
 
 		void             _push(topic_view subpath);
-		void             _pop () noexcept;
+		void             _pop ();
 		std::string_view _back() const noexcept;
-		std::string      _path() const;
+		std::string_view _view() const;
 	};
-	template<> class topic_base_<std::string>
+	template<> class topic_base_<lazy_path>
 	{
 	public:
 		topic_base_()  : _nearest(global_root_resource()) {}
 		~topic_base_() = default;
 
-		topic_base_(const resource_node_ptr &node)                              : _nearest(node ? node : global_root_resource()) {}
-		topic_base_(const resource_node_ptr &node, std::string_view subpath)    : _nearest(node ? node : global_root_resource()) {_push(subpath); _resolve();}
-		topic_base_(                               std::string_view    path)    : _nearest(global_root_resource())               {_push(   path); _resolve();}
+		topic_base_(                               std::string_view    path)    : _nearest(global_root_resource()) {_push(   path); _resolve();}
 
 		// Conversion with pathless topic
-		topic_base_(const topic_base_<void> &o)    : _nearest(o._node) {}
-		topic_base_(topic_base_<void>      &&o)    : _nearest(std::move(o._node)) {}
-		operator topic_base_<void>() const &       {return topic_base_<void>(          _nearest,  _subpath);}
-		operator topic_base_<void>() &&            {return topic_base_<void>(std::move(_nearest), _subpath);}
+		topic_base_(const topic_base_<void> &o);
+		topic_base_(topic_base_<void>      &&o);
+		operator topic_base_<void>() const &       {return topic_base_<void>(_realize());}
+		operator topic_base_<void>() &&            {_realize(); return topic_base_<void>(std::move(_nearest));}
 
+		bool operator==(const topic_base_       &other) const    {return _path == other._path;}
+		bool operator!=(const topic_base_       &other) const    {return _path != other._path;}
+		
 
 	protected:
+		topic_base_(const resource_node_ptr &node);
+		topic_base_(const resource_node_ptr &node, std::string_view subpath);
+
 		template<class P> friend class topic_base_;
+		template<class P> friend class topic_;  // visit_subscriptions
 		resource_node_ptr _nearest; // Never null.
-		std::string       _subpath; // Never has extra slashes.  Resolved at construction time or by resolve().
+		std::string       _path;    // Complete path, never has extra slashes.
 
 	protected:
-		bool                     _is_resolved()  const    {return _subpath.length();}
-		std::string_view         _unresolved()   const    {return _subpath;}
-		const resource_node_ptr &_nearest_node() const    {return _nearest;}
+		constexpr bool           _is_null     () const noexcept    {return false;}
+		bool                     _is_resolved()  const noexcept;
+		std::string_view         _unresolved()   const noexcept;
+		const resource_node_ptr &_nearest_node() const noexcept    {return _nearest;}
 
-		topic_base_&             _resolve()       noexcept    {_subpath = _resolve_with(_subpath); return *this;}
+		topic_base_&             _resolve()       noexcept;
 		topic_base_              _resolve() const noexcept    {auto tmp = *this; tmp._resolve(); return tmp;}
 		const resource_node_ptr &_realize();
 		resource_node_ptr        _realize() const             {auto tmp = *this; tmp._realize(); return std::move(tmp._nearest);}
 
 		void             _push(topic_view subpath);
 		void             _pop () noexcept;
-		std::string_view _back() const noexcept;
-		std::string      _path() const;
-
-	private:
-		std::string _resolve_with(std::string_view new_subpath) noexcept;
+		std::string_view _back() const noexcept    {return topic_view(_path).last_id();}
+		std::string_view _view() const             {return _path;}
 	};
 
 
@@ -283,21 +319,16 @@ namespace pleb
 	public:
 		using base_t = topic_base_<SubPath>;
 
-		static constexpr bool type_is_topic_path = std::is_same_v<SubPath, std::string>;
+		static constexpr bool type_can_be_null   = std::is_same_v<SubPath, void>;
+		static constexpr bool type_is_topic_path = std::is_same_v<SubPath, lazy_path>;
 
 		using other_topic_t = std::conditional_t<type_is_topic_path, topic, topic_path>;
 
-		static_assert(std::is_same_v<SubPath,void> || std::is_same_v<SubPath,std::string>,
-			"topic_base_ must use void or std::string as a template parameter.");
+		static_assert(std::is_same_v<SubPath,void> || std::is_same_v<SubPath,lazy_path>,
+			"topic_base_ must use void or pleb::lazy_path as a template parameter.");
 
 
 	protected:
-		/*std::string _resolve(topic_view subpath);
-		void        _resolve()    {if (_subpath.length()) _subpath = _resolve(_subpath);}
-		void        _realize(topic_view subpath);
-		void        _realize()    {if (_subpath.length()) _realize(_subpath); _subpath.clear();}*/
-
-
 		topic_(base_t      &&base)    : base_t(std::move(base)) {}
 		topic_(const base_t &base)    : base_t(base) {}
 
@@ -310,10 +341,10 @@ namespace pleb
 	public:
 		// Access the root resource.  (TODO allocate statically?)
 		
-		static topic_ root() noexcept    {return topic_(pleb::root_node());}
+		static topic_ root() noexcept    {return topic_(pleb::global_root_resource());}
 
 
-		topic_()  : base_t(nullptr) {}
+		topic_()  = default;
 		~topic_() = default;
 
 		// Look up a resource within the given resource node.
@@ -331,10 +362,13 @@ namespace pleb
 
 
 		// Convert between topic and topic_path.
-		topic_(const other_topic_t &other)               : base_t(other) {}
-		topic_(other_topic_t &&other)                    : base_t(std::move(other)) {}
-		topic_& operator=(const other_topic_t &other)    {static_cast<base_t&>(*this) = other;}
-		topic_& operator=(other_topic_t &&other)         {static_cast<base_t&>(*this) = std::move(other);}
+		topic_(const other_topic_t &other)                   : base_t(other) {}
+		topic_(other_topic_t &&other)            noexcept    : base_t(std::move(other)) {}
+		topic_& operator=(const other_topic_t &other)        {static_cast<base_t&>(*this) = other;            return *this;}
+		topic_& operator=(other_topic_t &&other) noexcept    {static_cast<base_t&>(*this) = std::move(other); return *this;}
+
+		bool operator==(const other_topic_t &&other) const noexcept    {return path() == other.path();}
+		bool operator!=(const other_topic_t &&other) const noexcept    {return path() != other.path();}
 
 
 
@@ -344,19 +378,22 @@ namespace pleb
 		topic_  child       (topic_view subpath) const    {auto copy = *this; copy._push(subpath); return copy;}
 		topic_& set_to_child(topic_view subpath)          {base_t::_push(subpath); return *this;}
 
-		// Access the parent topic.
-		//    The root is treated as its own parent.
-		topic_ parent()        const       {auto copy = *this; copy._pop(); return copy;}
-		void   set_to_parent() noexcept    {base_t::_pop();}
+		/*
+			Access the parent topic.
+				When using topic, the parent of a root topic is null.
+				When using topic_path, the parent of a root topic_path is itself.
+		*/
+		topic_ parent()        const noexcept(noexcept(base_t()._pop()))    {auto copy = *this; copy._pop(); return copy;}
+		void   set_to_parent()       noexcept(noexcept(base_t::_pop()))     {base_t::_pop();}
 
 
-		// Get the leaf identifier of this topic, or its full path.
-		//   id() returns "[root]" for the root node.
-		//   path_view() returns the path in up to two pieces and does not simplify slashes.
-		//   path() returns the path in one piece and does not simplify slashes.
-		std::string_view                id       () const noexcept    {return base_t::_back();}
-		//std::array<std::string_view, 2> path_view() const noexcept;
-		std::string                     path     () const             {return base_t::_path();}
+		/*
+			Get the leaf identifier of this topic, or its full path.
+				id() returns the last part of the topic path.
+				path() returns the complete path, with no redundant slashes.
+		*/
+		std::string_view id  () const noexcept    {return base_t::_back();}
+		std::string_view path() const             {return base_t::_view();}
 
 
 		/*
@@ -419,32 +456,14 @@ namespace pleb
 			Refer to bind_service(...) in bind.hpp for possible arguments.
 				bind.hpp should be included to enable these overloads.
 		*/
-		template<typename ... Args,    typename Valid = std::void_t<decltype(bind_service(std::declval<Args>()...))>>
-		std::shared_ptr<service> serve(Args&& ... args)
+		//template<typename ... Args,                        typename Valid = std::void_t<decltype(pleb::bind_service(std::declval<Args>()...))>>
+
+		template<typename ... Args>
+		auto serve(Args&& ... args) ->        decltype(pleb::bind_service(std::declval<Args&&>()...),
+			service_ptr())
 		{
-			return serve(bind_service(std::forward<Args>(args...)));
+			return serve(pleb::bind_service(std::forward<Args>(args)...));
 		}
-
-#if 0
-		/*
-			Serve a resource using calls to a method of some object.
-				The weak pointer is locked whenever the service is called.
-				If the service pointer outlives the object pointer, it will respond with "GONE".
-		*/
-		template<class T> [[nodiscard]]
-		std::shared_ptr<service> serve(
-			std::weak_ptr<T> svc_object,
-			void        (T::*svc_method)(pleb::request&));
-
-		/*
-			Serve a POST-only resource.
-				Commonly used for creating things or causing side effects.
-		*/
-		template<class T> [[nodiscard]]
-		std::shared_ptr<service> serve_POST(
-			std::weak_ptr<T> svc_object,
-			status      (T::*svc_method)(pleb::request&));
-#endif
 
 
 		/*
@@ -457,6 +476,8 @@ namespace pleb
 		void request(client_ref client, method method, V &&value = {}) const;
 
 		/* */                        void GET   (client_ref c)                 const    {return request(c, method::GET);}
+		/* */                        void HEAD  (client_ref c)                 const    {return request(c, method::HEAD);}
+		/* */                        void OPTIONS(client_ref c)                const    {return request(c, method::OPTIONS);}
 		template<class V = std::any> void PUT   (client_ref c, V &&value)      const    {return request(c, method::PUT,    std::forward<V>(value));}
 		template<class V = std::any> void POST  (client_ref c, V &&value = {}) const    {return request(c, method::POST,   std::forward<V>(value));}
 		template<class V = std::any> void PATCH (client_ref c, V &&value)      const    {return request(c, method::PATCH,  std::forward<V>(value));}
@@ -476,6 +497,8 @@ namespace pleb
 		auto_retrieve retrieve(method method, V &&value = {}) const;
 
 		/* */                       auto_retrieve GET   ()               const;
+		/* */                       auto_retrieve HEAD  ()               const;
+		/* */                       auto_retrieve OPTIONS()              const;
 		template<class V = std::any> auto_request PUT   (V &&value)      const;
 		template<class V = std::any> auto_request POST  (V &&value = {}) const;
 		template<class V = std::any> auto_request PATCH (V &&value)      const;
@@ -515,6 +538,24 @@ namespace pleb
 		void publish(const pleb::event &msg) const;
 
 
+
+		/*
+			Get the service, if any, at this specific topic.
+				This can be used to check if serve() would fail.
+			
+			Note: requests can be handled by recursive services in a parent topic
+				even if a topic provides no current_service.
+		*/
+		service_ptr current_service() const noexcept;
+
+		/*
+			Find the service which will respond when making a request to this topic.
+				This can be used to check if a request would instantly fail.
+				This method is also invoked when making a request.
+		*/
+		service_ptr find_service(flags::filtering filtering = flags::default_message_filtering) const noexcept;
+
+
 		/*
 			"visit" entities within this resource, via callback.
 				visit_resources invokes for this resource and each of its descendants.
@@ -534,26 +575,34 @@ namespace pleb
 				if the callback attempts to modify the resources it is traversing.
 				Avoid performing complex actions within the callback.
 		*/
-		template<typename Callback,        std::enable_if_t<std::is_invocable_v<Callback, const resource_node_ptr&>, int> SFINAE = 0>
-		void visit_resources(
+		template<typename Callback>
+		auto visit_resources(
 			const Callback &callback,
 			size_t recursion_depth = 255,
-			bool skip_this = false) const;
+			bool skip_this = false)       const    -> decltype(callback(std::declval<topic>()), void());
 
-		template<typename Callback,        std::enable_if_t<std::is_invocable_v<Callback, service_ptr>, int> SFINAE = 0>
-		void visit_services(
+		template<typename Callback>
+		auto visit_services(
 			const Callback &callback,
-			size_t recursion_depth = 255) const;
+			size_t recursion_depth = 255) const    -> decltype(callback(std::declval<service_ptr>()), void());
 
-		template<typename Callback,        std::enable_if_t<std::is_invocable_v<Callback, subscription_ptr>, int> SFINAE = 0>
-		void visit_subscriptions(
+		template<typename Callback>
+		auto visit_subscriptions(
 			const Callback &callback,
-			size_t recursion_depth = 255) const;
+			size_t recursion_depth = 255) const    -> decltype(callback(std::declval<subscription_ptr>()), void());
 
 
 	protected:
+		template<typename P> friend class topic_;
 		void _publish_exception(const pleb::event&, const subscription&, std::exception_ptr) const;
 	};
+
+
+	
+	inline bool operator==(const topic &lhs, const topic_path &rhs) noexcept    {return lhs.path() == rhs.path();}
+	inline bool operator!=(const topic &lhs, const topic_path &rhs) noexcept    {return lhs.path() != rhs.path();}
+	inline bool operator==(const topic_path &lhs, const topic &rhs) noexcept    {return lhs.path() == rhs.path();}
+	inline bool operator!=(const topic_path &lhs, const topic &rhs) noexcept    {return lhs.path() != rhs.path();}
 
 
 	namespace detail

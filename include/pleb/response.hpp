@@ -55,7 +55,7 @@ namespace pleb
 	private:
 #if _MSC_VER // Workaround for a bug in Visual Studio's implementation of futures
 		friend class std::_Associated_state<response>;
-		response() : message(nullptr,0,{},flags::filtering(0),flags::handling(0)) {}
+		response() : message(pleb::topic_path(),0,{},flags::filtering(0),flags::handling(0)) {}
 #endif
 	};
 
@@ -153,6 +153,6 @@ namespace pleb
 	client_ref::client_ref(std::future<T> *f)
 		: client_ptr(f ? std::make_shared<client_promise<T>>(f) : nullptr) {}
 
-	client_ref::client_ref(response_function &&f)
+	inline client_ref::client_ref(response_function &&f)
 		: client_ptr(f ? std::make_shared<pleb::client>(std::move(f)) : nullptr) {}
 }

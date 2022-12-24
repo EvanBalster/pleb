@@ -1,27 +1,32 @@
 # PLEB (Process-Local Event Bus)
 ⚠ This library is in early development.  The API is subject to change.
 
-PLEB is a header-only library extending C++17 with common patterns from network programming.  It provides a concurrent global **resource tree** similar to the index of a web server, implementing Request-Reply and Publish-Subscribe messaging patterns as lightweight function calls using any data structure.
+PLEB is a header-only library extending C++17 with patterns from network programming.  It provides a concurrent global **resource tree** similar to the index of a web server, implementing Request-Reply and Publish-Subscribe messaging patterns as lightweight function calls using any data structure.
 
 PLEB's design is based on the following observations:
 
-1. Request-Reply (REST) and Publish-Subscribe are excellent patterns for messaging and error handling — not only across networks. but also within programs with multiple modules or threads.
+1. Request-Reply (REST) and Publish-Subscribe are excellent patterns for messaging and error handling — not only across networks. but also within programs with various modules or threads.
 2. In-process messages do not necessarily need serialization or queueing, both of which create potentially unnecessary work.
 3. Global pathnames are more manageable than references or GUIDs when communicating across a complex program.
 
 PLEB does not replace messaging frameworks like ZeroMQ and NNG; rather, it can act as a front-end.  Where traditional frameworks treat in-process communication as a special case of network sockets, PLEB allows us to do the opposite by using local resources as an interface to remote ones.
 
-PLEB messages are realized as function calls using `std::any` as a generic container.  PLEB is multi-threaded and (mostly*) wait-free, meaning it can be used for extremely time-sensitive concurrent applications.  While PLEB is thread-safe for purposes of setting up the resource tree and issuing messages, it imposes no locks or message queueing — the application is expected to impose its own concurrency measures.
+Messages are realized as function calls using `std::any` as a container.  PLEB is multi-threaded and (mostly*) wait-free, meaning it can be used for extremely time-sensitive concurrent applications such as audio processing.  While PLEB is thread-safe for purposes of setting up the resource tree and issuing messages, it imposes no locks or queueing on messages — the application is expected to impose its own concurrency measures.
 
 (* PLEB's resource tree uses locking operations when adding resources or looking them up, pending the integration of a suitable wait-free hash table algorithm,)
 
 ## The Resource Tree
 
-Resources have path-like names such as `output/1`.  Internally, services and subscribers are registered with nodes in a concurrent tree of resources resembling a directory structure.  Resource paths are delimited by one or more foreslash `/` characters.  This means, for example, that a URL `https://example.com/1/2/3` would refer to a resource `http:` > `example.com` > `1` > `2` > `3`.
+Resources have path-like names such as `output/1`.  Resource paths are delimited by one or more foreslash `/` characters.  This means, for example, that a URL `https://example.com/1/2/3` would refer to a resource `http:` > `example.com` > `1` > `2` > `3`.
 
-The resource tree uses a "reverse ownership" idiom to manage its data structures.
+Application code works with classes called `topic` and `topic_path`.  These provide almost identical methods, with a few important differences:
 
-Resource nodes are not explicitly created or destroyed and will exist as long as they are referenced, including by services, subscribers or child resources.  PLEB achieves this through a reverse-ownership idiom described in the `coop` headers.
+* `topic` can be null and defaults to null.  The parent of a root `topic` is null.
+* `topic_path` cannot be null and defaults to the global root resource.  The parent of a root `topic_path` is itself.
+* `topic` is "eager" and will create the referenced resource if it does not exist.
+* `topic_path` is "lazy", holding a reference to the nearest existing resource and a string representation of the rest of the path.
+
+In most cases you should use the `topic` class, but `topic_path` can avoid unnecessary work when accessing resources that have no services or subscribers beneath them.  (Internally, the resource tree uses a "reverse ownership" idiom to manage its data structures.  This means that resources will exist as long as some `topic`, `service`,`subscription` or child resource is referring to them and will be deleted in a thread-safe manner when the last user expires.  See the `coop` headers for more information.)
 
 ## Quick  Examples
 
@@ -46,6 +51,16 @@ void main()
     pleb::reply reply = pleb::GET("/service/handshake");
 }
 ```
+
+## Best Practices
+
+First and foremost, abide by REST semantics when designing request-reply communications.  GET, HEAD, OPTIONS and TRACE are "safe" methods which should not have side effects on a service.  Some methods are idempotent, including all the safe methods plus PUT and DELETE.  
+
+A few other useful conventions to abide by:
+
+* Implement OPTIONS for services by responding with a value of type `pleb::method_set`.
+  * OPTIONS is implemented automatically when using the `serve`
+* Services implementing GET can respond to HEAD requests with a std::type_index, to provide metadata about the objects they return.
 
 ## How are Messages Processed?
 
@@ -97,7 +112,11 @@ Publish/subscribe is synchronous; any thread safety must be managed by the publi
 
 Requests in PLEB utilize HTTP methods:
 
-* **GET** retrieves data without modifying it.
+* Safe methods, which don't have side effects:
+  * **GET** retrieves data without modifying it.
+  * **HEAD** describes data without retrieving or modifying it.
+
+* Idempotent methods, 
 
 
 

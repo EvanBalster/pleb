@@ -31,7 +31,36 @@ namespace pleb
 
 	inline resource_node_ptr global_root_resource() noexcept
 	{
-		static resource_node_ptr root = resource_node::create("[root]"); return root;
+		static resource_node_ptr root = resource_node::create(""); return root;
+	}
+
+
+	inline topic_base_<lazy_path>::topic_base_(const topic_base_<void> &o)
+		:
+		_nearest(null_topic_error::check(o._node,  "can't make topic_path", "(null topic)")),
+		_path(_nearest->path()) {}
+
+	inline topic_base_<lazy_path>::topic_base_(topic_base_<void> &&o)
+		:
+		_nearest(std::move(o._node))
+	{
+		null_topic_error::check(_nearest, "can't make topic_path", "(null topic)");
+		_path = _nearest->path();
+	}
+
+	inline topic_base_<lazy_path>::topic_base_(const resource_node_ptr &node)
+		:
+		_nearest(null_topic_error::check(node, "can't make topic_path")),
+		_path(node->path())
+	{
+	}
+	inline topic_base_<lazy_path>::topic_base_(const resource_node_ptr &node, std::string_view subpath)
+		:
+		_nearest(null_topic_error::check(node, "can't make topic_path")),
+		_path(node->path())
+	{
+		_push(subpath);
+		_resolve();
 	}
 
 
@@ -40,76 +69,73 @@ namespace pleb
 		for (auto part : subpath) _node = _node->get_child(part);
 	}
 
-	inline void topic_base_<void>::_pop() noexcept
+	inline void topic_base_<void>::_pop()
 	{
+		null_topic_error::check(_node, "null topic has no parent", "(null topic)");
 		_node = _node->parent();
 	}
 
-	inline void topic_base_<std::string>::_push(topic_view addition)
+	inline void topic_base_<lazy_path>::_push(topic_view addition)
 	{
 		for (auto part : addition)
 		{
-			if (_subpath.length()) _subpath.push_back('/');
-			_subpath.append(part.data(), part.length());
+			if (_path.length()) _path.push_back('/');
+			_path.append(part.data(), part.length());
 		}
 	}
 
-	inline void topic_base_<std::string>::_pop() noexcept
+	inline void topic_base_<lazy_path>::_pop() noexcept
 	{
-		if (_subpath.length())
+		if (_path.length())
 		{
-			auto parent = topic_view(_subpath).parent();
-			_subpath.assign(parent.data(), parent.length());
+			auto parent = topic_view(_path).parent();
+			_path.assign(parent.data(), parent.length());
 		}
-		else _nearest = _nearest->parent();
+		else if (const auto &parent_node = _nearest->parent())
+		{
+			_nearest = parent_node;
+		}
+		// Otherwise it's a root, and no change is made.
 	}
 
 	inline std::string_view topic_base_<void>::_back() const noexcept
 	{
-		return _node->id();
-	}
-	inline std::string_view topic_base_<std::string>::_back() const noexcept
-	{
-		if (_subpath.length()) return topic_view(_subpath).last_id();
-		else                   return _nearest->id();
+		return _node ? _node->id() : "<null>";
 	}
 
 
-	inline std::string topic_base_<std::string>::_resolve_with(std::string_view subpath) noexcept
+	inline bool topic_base_<lazy_path>::_is_resolved() const noexcept
 	{
-		std::string unresolved;
-		for (auto part : topic_view(subpath))
+		return _nearest->path().length() >= _path.length();
+	}
+
+	inline std::string_view topic_base_<lazy_path>::_unresolved() const noexcept
+	{
+		return _is_resolved() ? std::string_view() :
+			std::string_view(_path).substr(
+				_nearest->path().length() ? _nearest->path().length()+1 : 0);
+	}
+
+	inline topic_base_<lazy_path>& topic_base_<lazy_path>::_resolve() noexcept
+	{
+		auto unresolved = _unresolved();
+		for (auto part : topic_view(_unresolved()))
 		{
-			if (auto child = _nearest->try_child(part)) _nearest = std::move(child);
-			else {unresolved = subpath.substr(part.data()-subpath.data()); break;}
+			if (auto child = _nearest->try_child(part))
+				_nearest = std::move(child);
+			else break;
 		}
-		return unresolved;
+		return *this;
 	}
-	inline const resource_node_ptr &topic_base_<std::string>::_realize()
+	inline const resource_node_ptr &topic_base_<lazy_path>::_realize()
 	{
-		for (auto part : topic_view(_subpath)) _nearest = _nearest->get_child(part);
-		_subpath.clear();
-	}
-
-	/*inline std::array<std::string_view, 2> topic::path_view() const noexcept
-	{
-		return {_base->path(), 
-	}*/
-
-	inline std::string topic_base_<void>::_path() const
-	{
-		return _node->path();
+		for (auto part : topic_view(_unresolved())) _nearest = _nearest->get_child(part);
+		return _nearest;
 	}
 
-	inline std::string topic_base_<std::string>::_path() const
+	inline std::string_view topic_base_<void>::_view() const
 	{
-		std::string result = _nearest->path();
-		if (_subpath.length())
-		{
-			if (result.length()) result.push_back('/');
-			result.append(_subpath);
-		}
-		return result;
+		return _node ? _node->path() : "<null>";
 	}
 	
 	template<typename P> [[nodiscard]]
@@ -119,6 +145,7 @@ namespace pleb
 		flags::handling       handling)
 	{
 		auto &node = _realize();
+		if constexpr (type_can_be_null) null_topic_error::check(node, "can't subscribe", "(null topic)");
 		return node->emplace_subscriber(node, std::move(f)); // TODO ignore_flags, handling
 	}
 
@@ -144,6 +171,7 @@ namespace pleb
 		flags::filtering filtering,
 		flags::handling  handling) const
 	{
+		if constexpr (type_can_be_null) null_topic_error::check(base_t::_nearest_node(), "can't publish", "(null topic)");
 		pleb::event e(*this, status, std::forward<T>(item), filtering, handling);
 		publish(e);
 	}
@@ -152,6 +180,7 @@ namespace pleb
 	std::shared_ptr<service> topic_<P>::serve(service_function &&function) noexcept
 	{
 		auto &node = _realize();
+		if constexpr (type_can_be_null) null_topic_error::check(node, "can't serve", "(null topic)");
 		return node->try_emplace_service(node, std::move(function));
 	}
 
@@ -219,6 +248,10 @@ namespace pleb
 	template<typename P>
 	/* */            auto_retrieve topic_<P>::GET   ()          const    {return retrieve(method::GET);}
 	template<typename P>
+	/* */            auto_retrieve topic_<P>::HEAD  ()          const    {return retrieve(method::HEAD);}
+	template<typename P>
+	/* */            auto_retrieve topic_<P>::OPTIONS()         const    {return retrieve(method::OPTIONS);}
+	template<typename P>
 	template<class V> auto_request topic_<P>::PUT   (V &&value) const    {return request(method::PUT,   std::forward<V>(value));}
 	template<typename P>
 	template<class V> auto_request topic_<P>::POST  (V &&value) const    {return request(method::POST,  std::forward<V>(value));}
@@ -230,39 +263,24 @@ namespace pleb
 	template<typename P>
 	void topic_<P>::issue(pleb::request &msg) const
 	{
-		const topic_<P>  &target = base_t::_resolve();
-		resource_node_ptr node   = target._nearest_node();
-
 		// Mark the message as unresponded.
 		msg.features &= ~flags::did_respond;
 
-		const bool recursive = msg.recursive();
-		auto filtering = msg.filtering & ~flags::recursive;
-
-		if (target._is_resolved()) goto start_resolved;
-
-		while (recursive && node)
+		if (service_ptr svc = find_service(msg.filtering))
 		{
-			filtering |= flags::recursive;
+			try                            {svc->func(msg);}
+			catch (status s)               {msg.respond(s);}
+			catch (status_exception &e)    {msg.respond(e.status);}
 
-		start_resolved:
-			if (auto svc = node->service_lock()) if (svc->accepts(filtering))
-			{
-				try                            {svc->func(msg);}
-				catch (status s)               {msg.respond(s);}
-				catch (status_exception &e)    {msg.respond(e.status);}
+			// Default response if service did not respond or move message.
+			if (!(msg.features & flags::did_respond)) msg.respond(statuses::NoContent);
 
-				// Default response if service did not respond or move message.
-				if (!(msg.features & flags::did_respond)) msg.respond(statuses::NoContent);
-				
-				msg.features |= flags::did_send;
-				return;
-			}
-
-			node = node->parent();
+			msg.features |= flags::did_send;
 		}
-
-		throw service_not_found("No service available", path());
+		else
+		{
+			throw service_not_found("No service available", path());
+		}
 	}
 
 	/*
@@ -276,6 +294,9 @@ namespace pleb
 		const topic_<P>  &target = base_t::_resolve();
 		resource_node_ptr node   = target._nearest_node();
 
+		if constexpr (type_can_be_null)
+			null_topic_error::check(node, "can't publish event", "(null topic)");
+
 		const bool recursive = msg.recursive();
 		auto filtering = msg.filtering & ~flags::recursive;
 		
@@ -286,124 +307,112 @@ namespace pleb
 			filtering |= flags::recursive;
 
 		start_resolved:
-			for (subscription &sub : node->subscribers()) if (sub.accepts(filtering))
+			for (subscription &sub : node->subscriptions()) if (sub.accepts(filtering))
 			{
 				try            {sub.func(msg);}
-				catch (...)    {_publish_exception(msg, sub, std::current_exception());}
+				catch (...)    {sub.topic._publish_exception(msg, sub, std::current_exception());}
 			}
 
 			node = node->parent();
 		}
 	}
 
-	template<typename P>
-	void topic_<P>::_publish_exception(
+	//template<typename P>
+	inline void topic_<void>::_publish_exception(
 		const pleb::event  &msg,
 		const subscription &sub,
 		std::exception_ptr  exception) const
 	{
-		auto node = sub.resource;
-
 		if (msg.filtering & flags::subscriber_exception)
 		{
 			// If an exception subscriber throws an exception, publish to the parent instead.
-			if (resource_node_ptr parent = node->parent())
+			if (resource_node_ptr parent = _nearest_node()->parent())
 				topic(parent).publish(statuses::InternalServerError, exception,
 					flags::subscriber_exception | flags::recursive, msg.requirements);
 		}
 		else
-			topic(node).publish(statuses::InternalServerError, exception,
+			this->publish(statuses::InternalServerError, exception,
 				flags::subscriber_exception, msg.requirements);
 
 		// TODO what if nobody handled the exception??  Unsafe to proceed?
 	}
 
-
-	/*
-		"visit" entities within this resource, via callback.
-			visit_resources invokes for this resource and each of its descendants.
-			visit_services invokes for each service beneath this resource.
-			visit_subscribers invokes for each service beneath this resource.
-
-		callback        -- a functor accepting a shared_ptr to the visited item.
-		recursion_depth -- how many generations of children to visit (0 = just this)
-
-		Resources mainly exist in order to host services and subscribers, but may exist
-			as a result of child resources, forced resolution or dangling references.
-			Think of them as folders -- on their own, more suggestive than informative.
-
-
-		WARNING: pending integration of a robust lock-free hashmap, these methods lock
-			the branches of the resource tree in read mode.  This can lead to deadlock
-			if the callback attempts to modify the resources it is traversing.
-			Avoid performing complex actions within the callback.
-	*/
 	template<typename P>
-	template<typename Callback, std::enable_if_t<std::is_invocable_v<Callback, const resource_node_ptr&>, int>>
-	void topic_<P>::visit_resources(const Callback &callback, size_t recursion_depth, bool skip_this) const
+	inline service_ptr topic_<P>::find_service(flags::filtering filtering) const noexcept
 	{
-		_realize();
-		if (_subpath.length()) return;
+		if constexpr (type_can_be_null)
+			null_topic_error::check(base_t::_nearest_node(), "can't request service", "(null topic)");
 
-		if (!skip_this) callback(_base);
+		service_ptr service;
+
+		const topic_<P>  &target = base_t::_resolve();
+		resource_node_ptr node   = target._nearest_node();
+
+		const bool recursive = (filtering & flags::recursive);
+		filtering &= ~flags::recursive;
+
+		if (target._is_resolved()) goto start_resolved;
+
+		while (recursive && node)
+		{
+			filtering |= flags::recursive;
+		start_resolved:
+			if (service = node->service_lock()) 
+			{
+				if (service->accepts(filtering)) break;
+				service.reset();
+			}
+			node = node->parent();
+		}
+
+		return service;
+	}
+
+	template<typename P>
+	inline service_ptr topic_<P>::current_service() const noexcept
+	{
+		if constexpr (type_can_be_null)
+			null_topic_error::check(base_t::_nearest_node(), "can't request service", "(null topic)");
+
+		const topic_<P> &target = base_t::_resolve();
+		return target._is_resolved() ? target._nearest_node()->service_lock() : nullptr;
+	}
+
+
+	template<typename P>
+	template<typename Callback>
+	auto topic_<P>::visit_resources(const Callback &callback, size_t recursion_depth, bool skip_this) const
+		-> decltype(callback(std::declval<topic>()), void())
+	{
+		auto &node = _realize();
+
+		if constexpr (type_can_be_null)
+			null_topic_error::check(node, "can't visit resources", "(null topic)");
+
+		if (!skip_this) callback(node);
 		auto scan = [&](const std::string &, resource_node_ptr node)
 		{
 			callback(node);
 			if (recursion_depth--) {topic(node).visit_resources(callback, recursion_depth-1, true);}
 		};
-		if (recursion_depth--) _base->visit_children(scan);
+		if (recursion_depth--) node->visit_children(scan);
 	}
 	template<typename P>
-	template<typename Callback, std::enable_if_t<std::is_invocable_v<Callback, service_ptr>, int>>
-	void topic_<P>::visit_services(const Callback &callback, size_t recursion_depth) const
+	template<typename Callback>
+	auto topic_<P>::visit_services(const Callback &callback, size_t recursion_depth) const
+		-> decltype(callback(std::declval<service_ptr>()), void())
 	{
-		visit_resources([&](const FIXME_ptr &rc)
-			{if (auto svc=rc->service_lock()) callback(std::move(svc));},
+		visit_resources([&](const topic &rc)
+			{if (auto svc=rc.current_service()) callback(std::move(svc));},
 			recursion_depth);
 	}
 	template<typename P>
-	template<typename Callback, std::enable_if_t<std::is_invocable_v<Callback, subscription_ptr>, int>>
-	void topic_<P>::visit_subscriptions(const Callback &callback, size_t recursion_depth) const
+	template<typename Callback>
+	auto topic_<P>::visit_subscriptions(const Callback &callback, size_t recursion_depth) const
+		-> decltype(callback(std::declval<subscription_ptr>()), void())
 	{
-		visit_resources([&](const FIXME_ptr &rc)
-			{for (auto i=rc->begin(),e=rc->end(); i!=e; ++i) callback(i);},
+		visit_resources([&](const topic &rc)
+			{for (auto i=rc._nearest_node()->subscriptions().begin(),e=rc._nearest_node()->subscriptions().end(); i!=e; ++i) callback(i);},
 			recursion_depth);
 	}
 }
-
-/*
-	==============
-	IMPLEMENTATION
-	==============
-*/
-
-// Process a request.
-inline void pleb::request::issue  ()    {topic.issue  (*this);}
-inline void pleb::event  ::publish()    {topic.publish(*this); features |= flags::did_send;}
-
-inline pleb::service::service(resource_node_ptr _resource, service_function &&_func,
-	flags::filtering ignored, flags::handling handling)
-	:
-	receiver(ignored, handling), resource(std::move(_resource)),
-	func(std::move(_func))
-{
-	topic(resource).publish(statuses::Created, this,
-		flags::service_status      | flags::recursive);
-}
-
-inline pleb::subscription::subscription(resource_node_ptr _resource, subscriber_function &&_func,
-	flags::filtering ignored, flags::handling handling)
-	:
-	receiver(ignored, handling), resource(std::move(_resource)),
-	func(std::move(_func))
-{
-	topic(resource).publish(statuses::Created, this,
-		flags::subscription_status | flags::recursive);
-}
-
-/*
-	Publishing status messages from a destructor is likely to create stability issues.
-		Instead, applications should hold weak pointers and actively monitor for expiration.
-*/
-inline pleb::service     ::~service()         {} //{resource->publish(statuses::Gone, this, flags::service_status      | flags::recursive);}
-inline pleb::subscription::~subscription()    {} //{resource->publish(statuses::Gone, this, flags::subscription_status | flags::recursive);}

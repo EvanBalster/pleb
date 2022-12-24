@@ -54,7 +54,7 @@ namespace pleb
 		static method    Parse(std::string_view) noexcept;
 		std::string_view toString()        const noexcept;
 
-		operator method_enum() const noexcept    {return code;}
+		constexpr operator method_enum() const noexcept    {return code;}
 
 		// Categorize the method according to HTTP conventions.
 		bool isSafe()        const;

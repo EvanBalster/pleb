@@ -47,7 +47,7 @@ namespace coop
 			Create a trie with the given identifier.
 				This is typically used to create a root trie.
 		*/
-		static std::shared_ptr<trie_> create(std::string_view id)    {return std::make_shared<constructor>(id);}
+		static std::shared_ptr<trie_> create(std::string_view id, char separator = '/')    {return std::make_shared<constructor>(id, separator);}
 
 		~trie_() {}
 
@@ -55,8 +55,8 @@ namespace coop
 			Get this trie's identifier or complete path.
 				The path is a list of ancestors, not including the root.
 		*/
-		const std::string &id  ()                   const noexcept    {return _id;}
-		std::string      path(char separator = '/') const             {std::string s; _path(s,separator); return s;}
+		std::string_view id  () const noexcept    {return {_path.data()+_path_id_pos, _path.length()-_path_id_pos};}
+		std::string_view path() const             {return _path;}
 
 
 		/*
@@ -110,25 +110,34 @@ namespace coop
 		}
 
 
+		/*
+			Visit child tries via callback.
+				Pending implementation of a lock-free hashmap this operation blocks any
+				mutation of the trie; incautious use may result in deadlock.
+		*/
+		template<typename Callback>
+		void visit_children(const Callback &callback) const noexcept(noexcept(_children.visit(callback)))
+			{_children.visit(callback);}
+
+
 		// The base class must provide shared_from_this.
 		std::shared_ptr<      trie_> shared_from_this()          {return std::shared_ptr<      trie_>(Coop_Base::shared_from_this(), this);}
 		std::shared_ptr<const trie_> shared_from_this() const    {return std::shared_ptr<const trie_>(Coop_Base::shared_from_this(), this);}
 		
 
 	protected:
-		trie_(std::string_view id)                                    : _id(id) {}
-		trie_(std::string_view id, std::shared_ptr<trie_> _parent)    : _id(id), _parent(std::move(_parent)) {}
-		trie_(std::string_view id, trie_ &_parent)                    : _id(id), _parent(_parent.shared_from_this()) {}
-
-		template<typename Callback>
-		void visit_children(const Callback &callback) const noexcept(noexcept(_children.visit(callback)))
-			{_children.visit(callback);}
+		trie_(std::string_view id, char separator)    : _path(id), _path_id_pos(0), _separator(separator) {}
+		trie_(std::string_view id, std::shared_ptr<trie_> parent)
+			:
+			_parent(std::move(parent)),
+			_path(_concat(_parent->path(), _parent->_separator, id)), _path_id_pos(unsigned short(_path.length()-id.length())),
+			_separator(_parent->_separator) {}
 
 		class constructor : public trie_
 		{
 		public:
-			constructor(std::string_view id) : trie_(id) {}
-			constructor(std::string_view id, trie_&t) : trie_(id, t) {}
+			constructor(std::string_view id, char  sep)    : trie_(id, sep) {}
+			constructor(std::string_view id, trie_&par)    : trie_(id, par.shared_from_this()) {}
 		};
 
 		template<typename Path, bool Nearest = false> [[nodiscard]]
@@ -146,17 +155,25 @@ namespace coop
 			return node;
 		}
 
-		void _path(std::string &s, char sep) const
+		static std::string _concat(std::string_view base, char separator, std::string_view id)
 		{
-			if (!_parent) return; // No root in path
-			_parent->_path(s, sep);
-			if (s.length()) s.push_back(sep);
-			s.append(_id);
+			std::string result;
+			if (base.length())
+			{
+				result.reserve(base.length()+1+id.length());
+				result.assign(base.data(), base.length());
+				result.push_back(separator);
+			}
+			else result.reserve(id.length());
+			result.append(id.data(), id.length());
+			return result;
 		}
 
 	private:
-		const std::string                      _id;
 		std::shared_ptr<trie_>                 _parent;
+		const std::string                      _path;
+		const unsigned short                   _path_id_pos;
+		const char                             _separator;
 		locking_weak_table<std::string, trie_> _children; // Hope to replace with atomic table later
 	};
 

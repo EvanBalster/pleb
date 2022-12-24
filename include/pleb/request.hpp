@@ -104,7 +104,7 @@ namespace pleb
 		//    This function is defined in resource.h
 		void issue(client_ref client)    {_client = std::move(client); issue();}
 
-		void issue();
+		void issue()                     {topic.issue(*this);}
 
 
 
@@ -150,7 +150,8 @@ namespace pleb
 	class service : public receiver
 	{
 	public:
-		const resource_node_ptr resource;
+		const pleb::topic topic;
+
 
 	private:
 		template<class P> friend class topic_;
@@ -159,11 +160,16 @@ namespace pleb
 
 	public:
 		service(
-			resource_node_ptr  resource,
-			service_function &&func,
+			const pleb::topic &_topic,
+			service_function &&_func,
 			flags::filtering   ignored = flags::default_service_ignore,
-			flags::handling    handling = flags::no_special_handling);
-		~service();
+			flags::handling    handling = flags::no_special_handling)
+			:
+			receiver(ignored, handling), topic(_topic), func(std::move(_func))
+		{
+			topic.publish(statuses::Created, this,
+				flags::service_status      | flags::recursive);
+		}
 	};
 
 

@@ -82,8 +82,28 @@ namespace
 }
 
 
+template<int I>
+struct pseudo_int
+{
+	constexpr operator int() const    {return I;}
+};
+
+constexpr pseudo_int<0> pseudo_ZERO;
+constexpr pseudo_int<1> pseudo_ONE;
+constexpr pseudo_int<2> pseudo_TWO;
+
+
 int main(int argc, char **argv)
 {
+	switch (argc)
+	{
+		case pseudo_ZERO: std::cout << "NO ARGS" << std::endl; break;
+		case pseudo_ONE: std::cout << "ONE ARG" << std::endl; break;
+		case pseudo_TWO: std::cout << "TWO ARGS" << std::endl; break;
+		default: std::cout << "MANY ARGS" << std::endl; break;
+	}
+
+
 	try
 	{
 		const std::string hi_string = "hi";
@@ -106,28 +126,30 @@ int main(int argc, char **argv)
 		std::cout << "pleb::convert failure: " << e.what() << std::endl;
 	}
 
-	{
-		auto svc = std::make_shared<test_service>();
+	auto svc_test = std::make_shared<test_service>();
+	auto svc_test_void = pleb::serve("test/void",   svc_test, &test_service::post_void, pleb::method::POST);
+	auto svc_test_int  = pleb::serve("test/int",    svc_test, &test_service::post_int, pleb::method::POST);
+	auto svc_test_meth = pleb::serve("test/method", svc_test, &test_service::post_method, pleb::method::POST);
 
+	{
 		auto client = std::make_shared<pleb::client>(&test_response_function);
 
-		pleb::request req(client, "/", pleb::method::POST);
+		pleb::topic("test/void")  .POST(client, {});
+		pleb::topic("test/method").POST(client, {});
 
-		pleb::bind_service(
-			svc, &test_service::post_void, pleb::method::POST
-		)(req);
-		pleb::bind_service(
-			svc, &test_service::post_method, pleb::method::POST
-		)(req);
+		pleb::POST("test/void",   client, std::any());
+		pleb::POST("test/method", client, std::any());
+
+		pleb::response resp = pleb::POST("test/method");
+
+		std::any int_holder;
 		for (int tries = 0; tries < 2; ++tries)
 		{
 			std::cout << "Requesting post_int" << std::endl;
-			pleb::bind_service(
-				svc, &test_service::post_method_int, pleb::method::POST
-			)(req);
-			req.value().emplace<int>(13);
-			std::cout << "\tRequest now holds " << req.value().type().name()
-				<< ": " << std::any_cast<int>(req.value()) << std::endl;
+			pleb::POST("test/int", client, int_holder);
+			int_holder.emplace<int>(13);
+			std::cout << "\tRequest now holds " << int_holder.type().name()
+				<< ": " << std::any_cast<int>(int_holder) << std::endl;
 		}
 		
 

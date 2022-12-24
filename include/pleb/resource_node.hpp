@@ -49,7 +49,7 @@ namespace pleb
 				subscriber_function    &&f)    {return _subs.emplace(p, std::move(f));}
 
 		// Iterate over subscribers.
-		const subscriber_list &subscribers() const    {return _subs;}
+		const subscriber_list &subscriptions() const    {return _subs;}
 
 
 	private:

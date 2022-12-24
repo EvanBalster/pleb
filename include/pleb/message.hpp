@@ -67,6 +67,16 @@ namespace pleb
 			message_base(topic, code, filtering, requirements),
 			content(std::move(value)) {}
 
+		message(
+			const topic_path &topic,
+			code_t            code,
+			const std::any   &value,
+			flags::filtering  filtering,
+			flags::handling    requirements)
+			:
+			message_base(topic, code, filtering, requirements),
+			content(value) {}
+
 
 		// Methods and members inherited from class content include the following:
 		using content::value;

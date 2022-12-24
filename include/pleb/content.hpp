@@ -73,10 +73,10 @@ namespace pleb
 
 
 	public:
-		content(
-			std::any &&value)
-			:
-			_value(std::move(value)) {}
+		content() = default;
+
+		content(std::any &&value)         : _value(std::move(value)) {}
+		content(const std::any &value)    : _value(value) {}
 
 
 		// Access the value's generic container.

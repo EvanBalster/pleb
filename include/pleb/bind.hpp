@@ -77,7 +77,7 @@ namespace pleb
 	namespace detail
 	{
 		// Helper method for implementing OPTIONS
-		void respond_to_misc_method(request &r, method_set allowed)
+		inline void respond_to_misc_method(request &r, method_set allowed)
 		{
 			switch (r.method())
 			{
