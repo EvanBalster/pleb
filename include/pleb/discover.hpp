@@ -58,7 +58,7 @@ namespace pleb
 		flags::handling handling = flags::no_special_handling)
 	{
 		auto watch = detail::discover_subscribe<Callback, service_ptr>(flags::service_status, callback, root, handling);
-		root->visit_services     ([&](service_ptr      svc) {callback(svc);});
+		root.visit_services     ([&](service_ptr      svc) {callback(svc);});
 		return watch;
 	}
 
@@ -69,7 +69,7 @@ namespace pleb
 		flags::handling handling = flags::no_special_handling)
 	{
 		auto watch = detail::discover_subscribe<Callback, subscription_ptr>(flags::subscription_status, callback, root, handling);
-		root->visit_subscriptions([&](subscription_ptr sub) {callback(sub);});
+		root.visit_subscriptions([&](subscription_ptr sub) {callback(sub);});
 		return watch;
 	}
 }

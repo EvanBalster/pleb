@@ -87,9 +87,11 @@ namespace pleb
 			Reply to this client.
 		*/
 		template<class T = std_any::any>
-		void respond(topic topic, status status, T &&value = {}) const
+		void respond(topic topic, status status, T &&value = {},
+			flags::filtering filtering = flags::default_message_filtering,
+			flags::handling handling = flags::no_special_handling) const
 		{
-			if (func) func(response(std::move(topic), status, std::move(value)));
+			if (func) func(response(std::move(topic), status, std::move(value), filtering, handling));
 		}
 	};
 

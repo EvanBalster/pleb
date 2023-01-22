@@ -146,7 +146,9 @@ namespace pleb
 	{
 		auto &node = _realize();
 		if constexpr (type_can_be_null) null_topic_error::check(node, "can't subscribe", "(null topic)");
-		return node->emplace_subscriber(node, std::move(f)); // TODO ignore_flags, handling
+		auto ptr = node->emplace_subscriber(node, std::move(f), ignore_flags, handling); // TODO ignore_flags, handling
+		publish(statuses::Created, ptr, flags::subscription_status | flags::recursive);
+		return ptr;
 	}
 
 	template<typename P>
@@ -177,11 +179,16 @@ namespace pleb
 	}
 
 	template<typename P> [[nodiscard]]
-	std::shared_ptr<service> topic_<P>::serve(service_function &&function) noexcept
+	std::shared_ptr<service> topic_<P>::serve(
+		service_function &&function,
+		flags::filtering   ignore_flags,
+		flags::handling    handling) noexcept
 	{
 		auto &node = _realize();
 		if constexpr (type_can_be_null) null_topic_error::check(node, "can't serve", "(null topic)");
-		return node->try_emplace_service(node, std::move(function));
+		auto ptr = node->try_emplace_service(node, std::move(function), ignore_flags, handling);
+		if (ptr) publish(statuses::Created, ptr, flags::service_status | flags::recursive);
+		return ptr;
 	}
 
 #if 0

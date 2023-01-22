@@ -113,11 +113,19 @@ namespace pleb
 				This is usually called by the receiving service.
 		*/
 		template<class T = std_any::any>
-		void respond(status status, T &&value = {})
+		void respond(status status, T &&value = {},
+			flags::filtering filtering = flags::default_message_filtering,
+			flags::handling handling = flags::no_special_handling)
 		{
 			features = features | flags::did_respond;
-			if (_client) _client->respond(topic, status, std::move(value));
+			if (_client) _client->respond(topic, status, std::move(value), filtering, handling);
 		}
+
+		/*
+			Claim the client for this message.
+				Think of this as a promise to respond later.
+		*/
+		client_ptr claim_client() noexcept    {return std::move(_client);}
 
 
 		/*
@@ -159,17 +167,14 @@ namespace pleb
 
 
 	public:
+		// Note this class will normally only be created by topic::serve() and co.
 		service(
 			const pleb::topic &_topic,
 			service_function &&_func,
 			flags::filtering   ignored = flags::default_service_ignore,
 			flags::handling    handling = flags::no_special_handling)
 			:
-			receiver(ignored, handling), topic(_topic), func(std::move(_func))
-		{
-			topic.publish(statuses::Created, this,
-				flags::service_status      | flags::recursive);
-		}
+			receiver(ignored, handling), topic(_topic), func(std::move(_func)) {}
 	};
 
 

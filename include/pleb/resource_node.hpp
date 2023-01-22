@@ -34,7 +34,9 @@ namespace pleb
 		[[nodiscard]] std::shared_ptr<service>
 			try_emplace_service(
 				const resource_node_ptr &p,
-				service_function       &&f)    {return _service.try_emplace(p, std::move(f));}
+				service_function       &&f,
+				flags::filtering         ff,
+				flags::handling          fh)    {return _service.try_emplace(p, std::move(f), ff, fh);}
 
 		// Access the service like a weak_ptr
 		std::shared_ptr<service> service_lock() const noexcept    {return _service.lock();}
@@ -46,7 +48,9 @@ namespace pleb
 		[[nodiscard]] std::shared_ptr<subscription>
 			emplace_subscriber(
 				const resource_node_ptr &p,
-				subscriber_function    &&f)    {return _subs.emplace(p, std::move(f));}
+				subscriber_function    &&f,
+				flags::filtering         ff,
+				flags::handling          fh)    {return _subs.emplace(p, std::move(f), ff, fh);}
 
 		// Iterate over subscribers.
 		const subscriber_list &subscriptions() const    {return _subs;}

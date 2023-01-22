@@ -74,16 +74,13 @@ namespace pleb
 
 
 	public:
+		// Note this class will normally only be created by topic::subscribe() and co.
 		subscription(
 			const pleb::topic    &_topic,
 			subscriber_function &&_func,
 			flags::filtering      ignored = flags::default_subscriber_ignore,
 			flags::handling       handling = flags::no_special_handling)
 			:
-			receiver(ignored, handling), topic(_topic), func(std::move(_func))
-		{
-			topic.publish(statuses::Created, this,
-				flags::subscription_status | flags::recursive);
-		}
+			receiver(ignored, handling), topic(_topic), func(std::move(_func)) {}
 	};
 }

@@ -99,6 +99,8 @@ namespace pleb
 			iterator(std::string_view s)              : _eos(s.data()+s.length()), _sub(_consume(s.data())) {}
 			iterator(std::string_view s, end_tag)     : _eos(s.data()+s.length()), _sub(_eos, 0) {}
 
+			explicit operator bool() const noexcept    {return _sub.data() == _eos;}
+
 			std::string_view operator* () const noexcept    {return  _sub;}
 			std::string_view operator->() const noexcept    {return &_sub;}
 
@@ -109,7 +111,7 @@ namespace pleb
 			bool operator> (const iterator &o) const noexcept    {return _sub.data() >  o._sub.data();}
 			bool operator>=(const iterator &o) const noexcept    {return _sub.data() >= o._sub.data();}
 
-			void operator++() noexcept    {_sub = _consume(_sub.data()+_sub.length());}
+			iterator& operator++() noexcept    {_sub = _consume(_sub.data()+_sub.length()); return *this;}
 
 		private:
 			const char      *_eos;
@@ -448,7 +450,10 @@ namespace pleb
 				Subsequent events on this resource will be passed to the function.
 				If a service already exists here, this function will fail, returning null.
 		*/
-		[[nodiscard]] std::shared_ptr<service> serve(service_function &&function) noexcept;
+		[[nodiscard]] std::shared_ptr<service> serve(
+			service_function &&function,
+			flags::filtering   ignore_flags = flags::default_service_ignore,
+			flags::handling    handling     = flags::no_special_handling) noexcept;
 
 		/*
 			SERVE this resource, with some automatic glue code to make life easier.
@@ -459,7 +464,30 @@ namespace pleb
 		//template<typename ... Args,                        typename Valid = std::void_t<decltype(pleb::bind_service(std::declval<Args>()...))>>
 
 		template<typename ... Args>
-		auto serve(Args&& ... args) ->        decltype(pleb::bind_service(std::declval<Args&&>()...),
+		auto serve(
+			Args&&       ... args,
+			flags::filtering ignore_flags,
+			flags::handling  handling)
+			->                               decltype(pleb::bind_service(std::declval<Args&&>()...),
+			service_ptr())
+		{
+			return serve(pleb::bind_service(std::forward<Args>(args)...), ignore_flags, handling);
+		}
+
+		template<typename ... Args>
+		auto serve(
+			Args&&       ... args,
+			flags::filtering ignore_flags)
+			->                               decltype(pleb::bind_service(std::declval<Args&&>()...),
+			service_ptr())
+		{
+			return serve(pleb::bind_service(std::forward<Args>(args)...), ignore_flags);
+		}
+
+		template<typename ... Args>
+		auto serve(
+			Args&&       ... args)
+			->                               decltype(pleb::bind_service(std::declval<Args&&>()...),
 			service_ptr())
 		{
 			return serve(pleb::bind_service(std::forward<Args>(args)...));
