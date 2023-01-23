@@ -39,13 +39,10 @@ namespace pleb
 		response(
 			const topic_path &topic, // Topic of the request (also provides handling rules)
 			pleb::status      status,
-			T               &&value     = {},
-			flags::filtering  filtering = flags::default_message_filtering,
-			flags::handling   handling  = flags::no_special_handling)
+			T               &&value  = {},
+			message_flags     flags  = {})
 			:
-			message(std::move(topic), code_t(status.code),
-				std::forward<T>(value), filtering, handling)
-			{}
+			message(std::move(topic), code_t(status.code), std::forward<T>(value), flags) {}
 
 
 		// Response status from <status.h>.  Stored in the code field.
@@ -55,7 +52,7 @@ namespace pleb
 	private:
 #if _MSC_VER // Workaround for a bug in Visual Studio's implementation of futures
 		friend class std::_Associated_state<response>;
-		response() : message(pleb::topic_path(),0,{},flags::filtering(0),flags::handling(0)) {}
+		response() : message(pleb::topic_path(),0,{},message_flags{}) {}
 #endif
 	};
 
@@ -78,20 +75,18 @@ namespace pleb
 
 
 	public:
-		client(response_function &&_func, flags::handling handling = flags::no_special_handling)
+		client(response_function &&_func, client_config flags = {})
 			:
-			receiver(flags::default_client_ignore, handling), func(std::move(_func)) {}
+			receiver(flags), func(std::move(_func)) {}
 
 
 		/*
 			Reply to this client.
 		*/
 		template<class T = std_any::any>
-		void respond(topic topic, status status, T &&value = {},
-			flags::filtering filtering = flags::default_message_filtering,
-			flags::handling handling = flags::no_special_handling) const
+		void respond(topic topic, status status, T &&value = {}, message_flags flags = {}) const
 		{
-			if (func) func(response(std::move(topic), status, std::move(value), filtering, handling));
+			if (func) func(response(std::move(topic), status, std::move(value), flags));
 		}
 	};
 

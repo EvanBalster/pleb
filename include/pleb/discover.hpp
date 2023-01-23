@@ -18,15 +18,15 @@ namespace pleb
 	namespace detail
 	{
 		template<class Callback, class ScanResult>
-		subscription_ptr discover_subscribe(flags::filtering select, Callback callback, topic root, flags::handling handling)
+		subscription_ptr discover_subscribe(Callback callback, topic root, flags::handling handling)
 		{
-			return root.subscribe([callback = std::move(callback), select](const pleb::event &event)
+			return root.subscribe([callback = std::move(callback)](const pleb::event &event)
 			{
-				if (event.filtering & select)
+				if (event.filtering & flags::announce_receiver)
 					if (auto *ptr = event.value_cast<ScanResult>())
 						callback(*ptr);
 			},
-				flags::regular, handling);
+				flags::regular | handling);
 		}
 	}
 
@@ -57,7 +57,7 @@ namespace pleb
 		topic           root     = topic::root(),
 		flags::handling handling = flags::no_special_handling)
 	{
-		auto watch = detail::discover_subscribe<Callback, service_ptr>(flags::service_status, callback, root, handling);
+		auto watch = detail::discover_subscribe<Callback, service_ptr>(callback, root, handling);
 		root.visit_services     ([&](service_ptr      svc) {callback(svc);});
 		return watch;
 	}
@@ -68,7 +68,7 @@ namespace pleb
 		topic           root     = topic::root(),
 		flags::handling handling = flags::no_special_handling)
 	{
-		auto watch = detail::discover_subscribe<Callback, subscription_ptr>(flags::subscription_status, callback, root, handling);
+		auto watch = detail::discover_subscribe<Callback, subscription_ptr>(callback, root, handling);
 		root.visit_subscriptions([&](subscription_ptr sub) {callback(sub);});
 		return watch;
 	}

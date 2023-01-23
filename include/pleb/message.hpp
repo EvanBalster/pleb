@@ -41,11 +41,10 @@ namespace pleb
 		message_base(
 			const topic_path &_topic,
 			uint32_t          _code,
-			flags::filtering  _filtering,
-			flags::handling   _requirements)
+			message_flags     flags)
 			:
 			topic(_topic), code(_code), features(flags::no_features),
-			filtering(_filtering), requirements(_requirements)
+			filtering(flags.filtering), requirements(flags.handling)
 			{}
 	};
 
@@ -61,20 +60,18 @@ namespace pleb
 			const topic_path &topic,
 			code_t            code,
 			std::any        &&value,
-			flags::filtering  filtering,
-			flags::handling    requirements)
+			message_flags     flags)
 			:
-			message_base(topic, code, filtering, requirements),
+			message_base(topic, code, flags),
 			content(std::move(value)) {}
 
 		message(
 			const topic_path &topic,
 			code_t            code,
 			const std::any   &value,
-			flags::filtering  filtering,
-			flags::handling    requirements)
+			message_flags     flags)
 			:
-			message_base(topic, code, filtering, requirements),
+			message_base(topic, code, flags),
 			content(value) {}
 
 
@@ -100,10 +97,9 @@ namespace pleb
 
 	public:
 		receiver(
-			flags::filtering _ignored = flags::default_receiver_ignore,
-			flags::handling  _handling = flags::no_special_handling)
+			receiver_config<flags::default_receiver_ignore> flags = {})
 			:
-			ignored(_ignored), handling(_handling) {}
+			ignored(flags.filtering), handling(flags.handling) {}
 
 		bool accepts(flags::filtering message_filtering) const noexcept
 		{

@@ -35,8 +35,7 @@ namespace pleb
 			try_emplace_service(
 				const resource_node_ptr &p,
 				service_function       &&f,
-				flags::filtering         ff,
-				flags::handling          fh)    {return _service.try_emplace(p, std::move(f), ff, fh);}
+				service_config           flags)    {return _service.try_emplace(p, std::move(f), flags);}
 
 		// Access the service like a weak_ptr
 		std::shared_ptr<service> service_lock() const noexcept    {return _service.lock();}
@@ -49,8 +48,7 @@ namespace pleb
 			emplace_subscriber(
 				const resource_node_ptr &p,
 				subscriber_function    &&f,
-				flags::filtering         ff,
-				flags::handling          fh)    {return _subs.emplace(p, std::move(f), ff, fh);}
+				subscription_config      flags)    {return _subs.emplace(p, std::move(f), flags);}
 
 		// Iterate over subscribers.
 		const subscriber_list &subscriptions() const    {return _subs;}

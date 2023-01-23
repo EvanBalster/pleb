@@ -12,8 +12,10 @@ namespace pleb
 #define PLEB_BITWISE_ENUM_OPS(ENUM_T, INT_T) \
 		constexpr inline ENUM_T operator| (ENUM_T  a, ENUM_T  b) noexcept    {return ENUM_T (INT_T(a)|INT_T(b));} \
 		constexpr inline ENUM_T operator& (ENUM_T  a, ENUM_T  b) noexcept    {return ENUM_T (INT_T(a)&INT_T(b));} \
+		constexpr inline ENUM_T operator^ (ENUM_T  a, ENUM_T  b) noexcept    {return ENUM_T (INT_T(a)^INT_T(b));} \
 		constexpr inline ENUM_T operator|=(ENUM_T &a, ENUM_T  b) noexcept    {return a = a | b;} \
 		constexpr inline ENUM_T operator&=(ENUM_T &a, ENUM_T  b) noexcept    {return a = a & b;} \
+		constexpr inline ENUM_T operator^=(ENUM_T &a, ENUM_T  b) noexcept    {return a = a ^ b;} \
 		constexpr inline ENUM_T operator~ (ENUM_T  a)            noexcept    {return ENUM_T (~INT_T(a));} \
 
 		PLEB_BITWISE_ENUM_OPS(features,  uint16_t)
@@ -37,21 +39,22 @@ namespace pleb
 		};
 
 		/*
-			These flags describe special properties of a message.
-				Receivers (services and subscribers) have policies
-				allowing them to ignore messages with certain flags
-				or involve an intervening function for others.
+			Filtering flags are used to block certain messages from
+				reaching certain receivers.  A receiver will ignore
+				messages with any filtering flags matching one of its
+				own filtering flags.
+				The recursive flag is special (see below).
 
-			Bits 31..24 are special and reserved for PLEB's own features.
+			Bits 15..8 are special and reserved for PLEB's own features.
+			Bits 7..0 are for application use.
 
-			Bits 23..0 are for application use.
 			Bits 23..16 invoke a helper function by default.
 			Bits 15..8 cause messages to be ignored by default.
 		*/
 		enum filtering : uint16_t
 		{
 			/*
-				[recursive] messages are thrown up the resource tree.
+				[recursive] messages are propagate up up the resource tree.
 					Recursive requests stop when a service accepts them.
 					Recursive events will always continue to the root.
 					The ignore recursive flag has a special behavior; it will not
@@ -64,11 +67,12 @@ namespace pleb
 			recursive            = (1 << 15), // Default: services ignore, subscribers accept
 
 			/*
-				These messages are published automatically by PLEB.
+				Messages with these flags are published automatically by PLEB.
+					announce_receiver    -- this service or subscriber has been added.
+					subscriber_exception -- a subscriber has thrown this exception.
 			*/
-			service_status       = (1 << 14), // Default: ignore
-			subscription_status  = (1 << 13), // Default: ignore
-			subscriber_exception = (1 << 12), // Default: ignore
+			announce_receiver    = (1 << 14), // Default: ignore
+			subscriber_exception = (1 << 13), // Default: ignore
 
 			/*
 				Suggested-use application flags.
@@ -78,7 +82,7 @@ namespace pleb
 
 				LOGGING is useful for messages not relevant to most subscribers.
 				INTERNAL is for messages that should not be sent to external networks.
-				REMOTE is for messages that originate from external networks.
+				REMOTE is for messages that originated from external networks.
 
 				REGULAR is for ordinary applications messages.  Set and accepted by default.
 			*/
@@ -102,9 +106,9 @@ namespace pleb
 
 			default_receiver_ignore = (0x7F00),
 
-			default_subscriber_ignore = default_receiver_ignore,
-			default_service_ignore    = default_receiver_ignore | recursive,
-			default_client_ignore     = 0,
+			default_subscription_ignore = default_receiver_ignore,
+			default_service_ignore      = default_receiver_ignore | recursive,
+			default_client_ignore       = 0,
 		};
 
 
@@ -151,5 +155,60 @@ namespace pleb
 			no_special_handling = 0,
 		};
 	};
+
+	/*
+		This structure is used to combine filtering and handling flags into one value.
+	*/
+	struct message_flags
+	{
+		flags::filtering filtering;
+		flags::handling  handling;
+
+		constexpr message_flags()
+			:
+			filtering(flags::default_message_filtering), handling(flags::no_special_handling) {}
+
+		constexpr message_flags(flags::filtering f)
+			:
+			filtering(f), handling(flags::no_special_handling) {}
+
+		constexpr message_flags(flags::filtering f, flags::handling h)
+			:
+			filtering(f), handling(h) {}
+
+		constexpr message_flags  operator| (flags::filtering f) const noexcept    {return {filtering|f,handling};}
+		constexpr message_flags  operator| (flags::handling  h) const noexcept    {return {filtering,handling|h};}
+		message_flags&           operator|=(flags::filtering f)       noexcept    {filtering |= f; return *this;}
+		message_flags&           operator|=(flags::handling  h)       noexcept    {handling  |= h; return *this;}
+	};
+
+	inline constexpr message_flags operator|(flags::filtering f, flags::handling h) noexcept    {return {f,h};}
+	inline constexpr message_flags operator|(flags::handling h, flags::filtering f) noexcept    {return {f,h};}
+	inline constexpr message_flags operator|(flags::filtering f, message_flags   m) noexcept    {return {m.filtering|f,m.handling};}
+	inline constexpr message_flags operator|(flags::handling h,  message_flags   m) noexcept    {return {m.filtering,h|m.handling};}
+
+	/*
+		This template is used as a parameter in subscribe and serve functions.
+	*/
+	template<flags::filtering DefaultFiltering>
+	struct receiver_config : public message_flags
+	{
+	public:
+		constexpr receiver_config()
+			:
+			message_flags(DefaultFiltering, flags::no_special_handling) {}
+
+		constexpr receiver_config(const message_flags &flags)
+			:
+			message_flags(flags) {}
+
+		constexpr receiver_config(flags::handling h)
+			:
+			message_flags(DefaultFiltering, h) {}
+	};
+
+	using subscription_config = receiver_config<flags::default_subscription_ignore>;
+	using service_config      = receiver_config<flags::default_service_ignore>;
+	using client_config       = receiver_config<flags::default_client_ignore>;
 }
 

@@ -417,9 +417,8 @@ namespace pleb
 				and the children/descendants of the resource (not counting aliases).
 		*/
 		[[nodiscard]] std::shared_ptr<subscription> subscribe(
-			subscriber_function &&f,
-			flags::filtering      ignore_flags = flags::default_subscriber_ignore,
-			flags::handling       handling     = flags::no_special_handling);
+			subscriber_function &&handler,
+			subscription_config   flags = {});
 
 		/*
 			Subscribe to a resource via calls to a method of some object.
@@ -428,8 +427,7 @@ namespace pleb
 		std::shared_ptr<subscription> subscribe(
 			std::weak_ptr<T> handler_object,
 			void        (T::*handler_method)(const pleb::event&),
-			flags::filtering ignore_flags = flags::default_subscriber_ignore,
-			flags::handling  handling     = flags::no_special_handling);
+			subscription_config flags = {});
 
 
 		/*
@@ -441,8 +439,7 @@ namespace pleb
 		void publish(
 			pleb::status     status    = statuses::OK,
 			T              &&item      = {},
-			flags::filtering filtering = flags::default_message_filtering,
-			flags::handling  handling  = flags::no_special_handling) const;
+			message_flags    flags     = {}) const;
 
 
 		/*
@@ -451,9 +448,8 @@ namespace pleb
 				If a service already exists here, this function will fail, returning null.
 		*/
 		[[nodiscard]] std::shared_ptr<service> serve(
-			service_function &&function,
-			flags::filtering   ignore_flags = flags::default_service_ignore,
-			flags::handling    handling     = flags::no_special_handling) noexcept;
+			service_function &&handler,
+			service_config      flags = {}) noexcept;
 
 		/*
 			SERVE this resource, with some automatic glue code to make life easier.
@@ -464,33 +460,17 @@ namespace pleb
 		//template<typename ... Args,                        typename Valid = std::void_t<decltype(pleb::bind_service(std::declval<Args>()...))>>
 
 		template<typename ... Args>
-		auto serve(
-			Args&&       ... args,
-			flags::filtering ignore_flags,
-			flags::handling  handling)
-			->                               decltype(pleb::bind_service(std::declval<Args&&>()...),
-			service_ptr())
-		{
-			return serve(pleb::bind_service(std::forward<Args>(args)...), ignore_flags, handling);
-		}
-
-		template<typename ... Args>
-		auto serve(
-			Args&&       ... args,
-			flags::filtering ignore_flags)
-			->                               decltype(pleb::bind_service(std::declval<Args&&>()...),
-			service_ptr())
-		{
-			return serve(pleb::bind_service(std::forward<Args>(args)...), ignore_flags);
-		}
-
-		template<typename ... Args>
-		auto serve(
-			Args&&       ... args)
-			->                               decltype(pleb::bind_service(std::declval<Args&&>()...),
-			service_ptr())
+		auto serve(Args&& ... args)
+			->                               decltype(pleb::bind_service(std::declval<Args&&>()...), service_ptr())
 		{
 			return serve(pleb::bind_service(std::forward<Args>(args)...));
+		}
+
+		template<typename ... Args>
+		auto serve(service_config flags, Args&& ... args)
+			->                               decltype(pleb::bind_service(std::declval<Args&&>()...), service_ptr())
+		{
+			return serve(pleb::bind_service(std::forward<Args>(args)...), flags);
 		}
 
 

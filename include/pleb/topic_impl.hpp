@@ -141,13 +141,12 @@ namespace pleb
 	template<typename P> [[nodiscard]]
 	std::shared_ptr<subscription> topic_<P>::subscribe(
 		subscriber_function &&f,
-		flags::filtering      ignore_flags,
-		flags::handling       handling)
+		subscription_config   flags)
 	{
 		auto &node = _realize();
 		if constexpr (type_can_be_null) null_topic_error::check(node, "can't subscribe", "(null topic)");
-		auto ptr = node->emplace_subscriber(node, std::move(f), ignore_flags, handling); // TODO ignore_flags, handling
-		publish(statuses::Created, ptr, flags::subscription_status | flags::recursive);
+		auto ptr = node->emplace_subscriber(node, std::move(f), flags);
+		publish(statuses::Created, ptr, flags::announce_receiver | flags::recursive);
 		return ptr;
 	}
 
@@ -156,13 +155,12 @@ namespace pleb
 	inline std::shared_ptr<subscription> topic_<P>::subscribe(
 		std::weak_ptr<T> handler_object,
 		void        (T::*handler_method)(const pleb::event&),
-		flags::filtering ignore_flags,
-		flags::handling  handling)
+		subscription_config flags)
 	{
 		return subscribe([m=handler_method, w=std::move(handler_object)](const pleb::event &r)
 		{
 			if (auto s=w.lock()) (s.get()->*m)(r);
-		}, ignore_flags, handling);
+		}, flags);
 	}
 
 	template<typename P>
@@ -170,24 +168,22 @@ namespace pleb
 	void topic_<P>::publish(
 		status           status,
 		T              &&item,
-		flags::filtering filtering,
-		flags::handling  handling) const
+		message_flags    flags) const
 	{
 		if constexpr (type_can_be_null) null_topic_error::check(base_t::_nearest_node(), "can't publish", "(null topic)");
-		pleb::event e(*this, status, std::forward<T>(item), filtering, handling);
+		pleb::event e(*this, status, std::forward<T>(item), flags);
 		publish(e);
 	}
 
 	template<typename P> [[nodiscard]]
 	std::shared_ptr<service> topic_<P>::serve(
 		service_function &&function,
-		flags::filtering   ignore_flags,
-		flags::handling    handling) noexcept
+		service_config     flags) noexcept
 	{
 		auto &node = _realize();
 		if constexpr (type_can_be_null) null_topic_error::check(node, "can't serve", "(null topic)");
-		auto ptr = node->try_emplace_service(node, std::move(function), ignore_flags, handling);
-		if (ptr) publish(statuses::Created, ptr, flags::service_status | flags::recursive);
+		auto ptr = node->try_emplace_service(node, std::move(function), flags);
+		if (ptr) publish(statuses::Created, ptr, flags::announce_receiver | flags::recursive);
 		return ptr;
 	}
 
@@ -335,11 +331,11 @@ namespace pleb
 			// If an exception subscriber throws an exception, publish to the parent instead.
 			if (resource_node_ptr parent = _nearest_node()->parent())
 				topic(parent).publish(statuses::InternalServerError, exception,
-					flags::subscriber_exception | flags::recursive, msg.requirements);
+					flags::subscriber_exception | flags::recursive | msg.requirements);
 		}
 		else
 			this->publish(statuses::InternalServerError, exception,
-				flags::subscriber_exception, msg.requirements);
+				flags::subscriber_exception | msg.requirements);
 
 		// TODO what if nobody handled the exception??  Unsafe to proceed?
 	}

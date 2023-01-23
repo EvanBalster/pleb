@@ -61,12 +61,10 @@ namespace pleb
 			client_ref        client,
 			const topic_path &topic,
 			pleb::method      method,
-			T               &&value     = {},
-			flags::filtering  filtering = flags::default_message_filtering,
-			flags::handling   handling  = flags::no_special_handling)
+			T               &&value  = {},
+			message_flags     flags  = {})
 			:
-			message(std::move(topic), code_t(method.code),
-				std::forward<T>(value), filtering, handling),
+			message(std::move(topic), code_t(method.code), std::forward<T>(value), flags),
 			_client(client)
 			{}
 
@@ -113,12 +111,10 @@ namespace pleb
 				This is usually called by the receiving service.
 		*/
 		template<class T = std_any::any>
-		void respond(status status, T &&value = {},
-			flags::filtering filtering = flags::default_message_filtering,
-			flags::handling handling = flags::no_special_handling)
+		void respond(status status, T &&value = {}, message_flags flags = {})
 		{
 			features = features | flags::did_respond;
-			if (_client) _client->respond(topic, status, std::move(value), filtering, handling);
+			if (_client) _client->respond(topic, status, std::move(value), flags);
 		}
 
 		/*
@@ -171,10 +167,9 @@ namespace pleb
 		service(
 			const pleb::topic &_topic,
 			service_function &&_func,
-			flags::filtering   ignored = flags::default_service_ignore,
-			flags::handling    handling = flags::no_special_handling)
+			service_config     flags = {})
 			:
-			receiver(ignored, handling), topic(_topic), func(std::move(_func)) {}
+			receiver(flags), topic(_topic), func(std::move(_func)) {}
 	};
 
 

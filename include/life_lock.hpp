@@ -239,8 +239,8 @@ namespace edb
 #else
 		/*
 			Low-memory implementation.
-				Relies on assumption that a valid shared_anchor's first word
-				(typically a control block pointer) never has value 0 or 1.
+				Relies on assumption that a non-expired shared_anchor's first word
+				(typically null or a pointer) never has value 0 or 1.
 		*/
 		union
 		{

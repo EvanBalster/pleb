@@ -35,13 +35,10 @@ namespace pleb
 		event(
 			const topic_path &topic,
 			pleb::status      status,
-			T               &&value     = {},
-			flags::filtering  filtering = flags::default_message_filtering,
-			flags::handling   handling  = flags::no_special_handling)
+			T               &&value  = {},
+			message_flags     flags  = {})
 			:
-			message(topic, code_t(status.code),
-				std::forward<T>(value), filtering, handling)
-			{}
+			message(topic, code_t(status.code), std::forward<T>(value), flags) {}
 
 
 		// Event status from <status.h>.  Stored in the code field.
@@ -78,9 +75,8 @@ namespace pleb
 		subscription(
 			const pleb::topic    &_topic,
 			subscriber_function &&_func,
-			flags::filtering      ignored = flags::default_subscriber_ignore,
-			flags::handling       handling = flags::no_special_handling)
+			service_config        flags = {})
 			:
-			receiver(ignored, handling), topic(_topic), func(std::move(_func)) {}
+			receiver(flags), topic(_topic), func(std::move(_func)) {}
 	};
 }
