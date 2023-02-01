@@ -202,6 +202,10 @@ namespace pleb
 			:
 			message_flags(flags) {}
 
+		constexpr receiver_config(flags::filtering f, flags::handling h = flags::no_special_handling)
+			:
+			message_flags(f, h) {}
+
 		constexpr receiver_config(flags::handling h)
 			:
 			message_flags(DefaultFiltering, h) {}

@@ -3,17 +3,17 @@
 
 PLEB is a header-only library extending C++17 with patterns from network programming.  It provides a concurrent global **resource tree** similar to the index of a web server, implementing Request-Reply and Publish-Subscribe messaging patterns as lightweight function calls using any data structure.
 
+PLEB does not replace messaging frameworks like ZeroMQ and NNG; rather, it provides a tailored API that can act as a front-end to these.  Where traditional frameworks treat in-process communication as a special case of network sockets, PLEB allows us to do the opposite by using local resources as an interface to remote ones.
+
 PLEB's design is based on the following observations:
 
 1. Request-Reply (REST) and Publish-Subscribe are excellent patterns for messaging and error handling — not only across networks. but also within programs with various modules or threads.
-2. In-process messages do not necessarily need serialization or queueing, both of which create potentially unnecessary work.
+2. Unlike socket messages, in-process messages do not necessarily need serialization or queueing.
 3. Global pathnames are more manageable than references or GUIDs when communicating across a complex program.
 
-PLEB does not replace messaging frameworks like ZeroMQ and NNG; rather, it can act as a front-end.  Where traditional frameworks treat in-process communication as a special case of network sockets, PLEB allows us to do the opposite by using local resources as an interface to remote ones.
+Messages are realized as function calls using `std::any` as a container.  PLEB is multi-threaded and (mostly†) wait-free, meaning it can be used for extremely time-sensitive concurrent applications such as audio processing.  While PLEB is designed for concurrent programming, and is thread-safe for purposes of setting up the resource tree and issuing messages, it imposes no locks or queueing of its own on messages — the application is expected to impose its own concurrency measures.
 
-Messages are realized as function calls using `std::any` as a container.  PLEB is multi-threaded and (mostly*) wait-free, meaning it can be used for extremely time-sensitive concurrent applications such as audio processing.  While PLEB is thread-safe for purposes of setting up the resource tree and issuing messages, it imposes no locks or queueing on messages — the application is expected to impose its own concurrency measures.
-
-(* PLEB's resource tree uses locking operations when adding resources or looking them up, pending the integration of a suitable wait-free hash table algorithm,)
+*† Pending integration of a suitable wait-free table, PLEB's resource tree uses locking operations when adding or finding paths in the resource tree.  Serving, subscribing, requesting, responding and publishing are wait-free.*
 
 ## The Resource Tree
 
@@ -59,8 +59,8 @@ First and foremost, abide by REST semantics when designing request-reply communi
 A few other useful conventions to abide by:
 
 * Implement OPTIONS for services by responding with a value of type `pleb::method_set`.
-  * OPTIONS is implemented automatically when using the `serve`
-* Services implementing GET can respond to HEAD requests with a std::type_index, to provide metadata about the objects they return.
+  * OPTIONS is implemented automatically when using `bind_service` and the `serve` function based on it.
+* Services implementing GET can respond to HEAD requests with a `std::type_index`, to indicate the type with which they will respond.
 
 ## How are Messages Processed?
 

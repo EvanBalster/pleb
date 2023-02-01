@@ -99,10 +99,10 @@ namespace pleb
 			iterator(std::string_view s)              : _eos(s.data()+s.length()), _sub(_consume(s.data())) {}
 			iterator(std::string_view s, end_tag)     : _eos(s.data()+s.length()), _sub(_eos, 0) {}
 
-			explicit operator bool() const noexcept    {return _sub.data() == _eos;}
+			explicit operator bool() const noexcept    {return _sub.data() != _eos;}
 
-			std::string_view operator* () const noexcept    {return  _sub;}
-			std::string_view operator->() const noexcept    {return &_sub;}
+			const std::string_view& operator* () const noexcept    {return  _sub;}
+			const std::string_view* operator->() const noexcept    {return &_sub;}
 
 			bool operator==(const iterator &o) const noexcept    {return _sub.data() == o._sub.data();}
 			bool operator!=(const iterator &o) const noexcept    {return _sub.data() != o._sub.data();}
@@ -141,13 +141,12 @@ namespace pleb
 		bool is_absolute() const noexcept    {return string.length() && string[0] == Delimiter;}
 
 
-		// Produce a string_view removing the last path segment.
-		//   May leave trailing slashes if the parent is not a blank.
+		// Produce a string_view removing the last path segment (and preceding slash if any)
 		std::string_view parent() const noexcept
 		{
-			const char *p = string.data();
-			for (auto &i : *this) p = i.data();
-			return string.substr(0, p - string.data());
+			size_t p = 0;
+			for (auto &i : *this) p = i.data() - string.data();
+			return string.substr(0, p ? p-1 : 0);
 		}
 
 		std::string_view last_id() const noexcept

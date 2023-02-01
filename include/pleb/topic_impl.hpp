@@ -273,6 +273,7 @@ namespace pleb
 		{
 			try                            {svc->func(msg);}
 			catch (status s)               {msg.respond(s);}
+			catch (statuses s)             {msg.respond(s);}
 			catch (status_exception &e)    {msg.respond(e.status);}
 
 			// Default response if service did not respond or move message.
