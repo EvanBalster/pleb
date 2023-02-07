@@ -187,46 +187,6 @@ namespace pleb
 		return ptr;
 	}
 
-#if 0
-	template<class T> [[nodiscard]]
-	std::shared_ptr<service> topic::serve(
-		std::weak_ptr<T> svc_object,
-		void        (T::*svc_method)(pleb::request&))
-	{
-		return serve([m=svc_method, w=std::move(svc_object)](pleb::request &r)
-		{
-			if (auto s = w.lock()) (s.get()->*m)(r);
-			else r.respond_Gone();
-		});
-	}
-
-	/*
-		Serve a POST-only resource.
-			Commonly used for creating things or causing side effects.
-	*/
-	template<class T> [[nodiscard]]
-	std::shared_ptr<service> topic::serve_POST(
-		std::weak_ptr<T> svc_object,
-		status      (T::*svc_method)(pleb::request&))
-	{
-		return serve([m=svc_method, w=std::move(svc_object)](pleb::request &r)
-		{
-			if (auto s = w.lock()) switch (r.method())
-			{
-			case method::POST:
-				r.respond((s.get()->*m)(r));
-				break;
-			case method::OPTIONS:
-				r.respond_OK(method::POST | method::OPTIONS);
-				break;
-			default:
-				r.respond_MethodNotAllowed();
-			}
-			else r.respond_Gone();
-		});
-	}
-#endif
-
 	template<typename P>
 	template<class V>
 	void topic_<P>::request(client_ref client, method method, V &&value) const

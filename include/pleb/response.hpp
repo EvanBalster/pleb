@@ -86,7 +86,7 @@ namespace pleb
 		template<class T = std_any::any>
 		void respond(topic topic, status status, T &&value = {}, message_flags flags = {}) const
 		{
-			if (func) func(response(std::move(topic), status, std::move(value), flags));
+			if (func) func(response(std::move(topic), status, std::forward<T>(value), flags));
 		}
 	};
 

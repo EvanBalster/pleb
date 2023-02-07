@@ -131,6 +131,8 @@ int main(int argc, char **argv)
 	auto svc_test_int  = pleb::serve("test/int",    svc_test, &test_service::post_int, pleb::method::POST);
 	auto svc_test_meth = pleb::serve("test/method", svc_test, &test_service::post_method, pleb::method::POST);
 
+	auto svc_test_proxy = pleb::forward_requests("test/proxy", "test/method");
+
 	{
 		auto client = std::make_shared<pleb::client>(&test_response_function);
 
@@ -139,6 +141,7 @@ int main(int argc, char **argv)
 
 		pleb::POST("test/void",   client, std::any());
 		pleb::POST("test/method", client, std::any());
+		pleb::POST("test/proxy", client, std::any());
 
 		pleb::response resp = pleb::POST("test/method");
 

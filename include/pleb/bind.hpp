@@ -108,7 +108,7 @@ namespace pleb
 		{
 			using type = std::decay_t<ResponseValue>;
 			if      constexpr (std::is_same_v<type, status  >) r.respond(v);
-			else if constexpr (std::is_same_v<type, response>) r.respond(v.status(), std::move(v.value()));
+			else if constexpr (std::is_same_v<type, response>) r.respond(v.status(), std::forward<ResponseValue>(v.value()));
 			else                                               r.respond(default_status, std::forward<ResponseValue>(v));
 		}
 	}

@@ -64,7 +64,7 @@ namespace pleb
 			T               &&value  = {},
 			message_flags     flags  = {})
 			:
-			message(std::move(topic), code_t(method.code), std::forward<T>(value), flags),
+			message(topic, code_t(method.code), std::forward<T>(value), flags),
 			_client(client)
 			{}
 
@@ -114,7 +114,7 @@ namespace pleb
 		void respond(status status, T &&value = {}, message_flags flags = {})
 		{
 			features = features | flags::did_respond;
-			if (_client) _client->respond(topic, status, std::move(value), flags);
+			if (_client) _client->respond(topic, status, std::forward<T>(value), flags);
 		}
 
 		/*
@@ -257,4 +257,36 @@ namespace pleb
 			features |= flags::did_send;
 		}
 	};
+
+
+
+	/*
+		A request relay is a special service that forwards messages.
+			It has no additional functionality at the moment.
+	*/
+	class service_relay : public service
+	{
+	protected:
+		using service::service;
+	};
+
+
+	/*
+		Implementation of methods from the topic class.
+	*/
+	template<typename SubPath>
+	std::shared_ptr<service_relay> topic_<SubPath>::forward_requests(
+		topic          service_topic,
+		service_config flags)
+	{
+		if (!(flags.filtering & pleb::flags::recursive) && is_ancestor_of(service_topic))
+			throw std::logic_error("Forwarding requests to a child topic might cause a stack overflow.");
+
+		return std::static_pointer_cast<service_relay>(
+			serve([service_topic = std::move(service_topic)](pleb::request &request)
+		{
+			request.topic = service_topic;
+			service_topic.issue(request);
+		}, flags));
+	}
 }

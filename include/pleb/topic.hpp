@@ -39,6 +39,9 @@ namespace pleb
 	using service_ptr = std::shared_ptr<service>;
 	using service_function = std::function<void(request&)>;
 
+	class service_relay;
+	using service_relay_ptr = std::shared_ptr<service_relay>;
+
 	class response;
 	class client;
 	using client_ptr = std::shared_ptr<client>;
@@ -48,6 +51,9 @@ namespace pleb
 	class subscription;
 	using subscription_ptr = std::shared_ptr<subscription>;
 	using subscriber_function = std::function<void(const event&)>;
+
+	class event_relay;
+	using event_relay_ptr = std::shared_ptr<event_relay>;
 
 	class resource_data;
 	using resource_node = coop::trie_<resource_data>;
@@ -389,6 +395,25 @@ namespace pleb
 
 
 		/*
+			Check if another topic is an ancestor of this one.
+		*/
+		template<typename SubPath>
+		bool is_ancestor_of(topic_<SubPath> other) const noexcept
+		{
+			size_t len = path().length();
+			while (true)
+			{
+				auto olen = other.path().length();
+				if (olen < len) return false;
+				if (olen == len) return path() == other.path();
+				other._pop();
+			}
+		}
+		template<typename SubPath>
+		bool is_descendant_of(const topic_<SubPath> &other) const noexcept    {return other.is_ancestor_of(*this);}
+
+
+		/*
 			Get the leaf identifier of this topic, or its full path.
 				id() returns the last part of the topic path.
 				path() returns the complete path, with no redundant slashes.
@@ -442,6 +467,19 @@ namespace pleb
 
 
 		/*
+			Create a subscription which re-publishes events to another topic.
+				Forwarding will continue as long as the returned pointer is held.
+
+			Throws an exception if destination is a child of this topic,
+				unless the forwarder is configured to ignore recursive events.
+		*/
+		std::shared_ptr<event_relay> forward_events(
+			topic_path          destination_topic,
+			subscription_config flags = {});
+
+
+
+		/*
 			SERVE this resource.
 				Subsequent events on this resource will be passed to the function.
 				If a service already exists here, this function will fail, returning null.
@@ -449,6 +487,20 @@ namespace pleb
 		[[nodiscard]] std::shared_ptr<service> serve(
 			service_function &&handler,
 			service_config      flags = {}) noexcept;
+
+
+		/*
+			Create a service which forwards requests to another topic.
+				Forwarding will continue as long as the returned pointer is held.
+				Responses will refer to the service topic, not the forwarding one.
+
+			If flags permit the forwarder to accept recursive messages,
+				the destination topic must not be a child of this topic.
+		*/
+		std::shared_ptr<service_relay> forward_requests(
+			topic          service_topic,
+			service_config flags = {});
+
 
 		/*
 			SERVE this resource, with some automatic glue code to make life easier.

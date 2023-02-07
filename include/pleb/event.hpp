@@ -1,5 +1,6 @@
 #pragma once
 
+#include "topic.hpp"
 #include "message.hpp"
 #include "status.hpp"
 
@@ -79,4 +80,39 @@ namespace pleb
 			:
 			receiver(flags), topic(_topic), func(std::move(_func)) {}
 	};
+
+
+
+	/*
+		An event relay is a special subscription that republishes messages.
+			It has no additional functionality at the moment.
+	*/
+	class event_relay : public subscription
+	{
+	protected:
+		using subscription::subscription;
+	};
+
+
+	/*
+		Implementation of methods from the topic class.
+	*/
+	template<typename SubPath>
+	std::shared_ptr<event_relay> topic_<SubPath>::forward_events(
+		topic_path          destination_topic,
+		subscription_config flags)
+	{
+		if (!(flags.filtering & pleb::flags::recursive) && is_ancestor_of(destination_topic))
+			throw std::logic_error("Forwarding events to a child topic would cause a stack overflow.");
+
+		return std::static_pointer_cast<event_relay>(
+			subscribe([destination_topic = std::move(destination_topic)](const pleb::event &event)
+		{
+			// Generate a copy of the event...
+			destination_topic.publish(
+				event.status(),
+				event.value(),
+				event.filtering | event.requirements);
+		}, flags));
+	}
 }

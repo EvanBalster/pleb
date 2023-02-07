@@ -5,6 +5,13 @@
 #include "topic_impl.hpp"
 
 
+/*
+	This header includes most other PLEB functions, and defines
+		global versions of common topic methods, accepting the topic
+		as the first argument and automatically looking it up.
+*/
+
+
 namespace pleb
 {
 #define PLEB_FORWARD_TO_TOPIC(METHOD_NAME) \
@@ -24,7 +31,7 @@ namespace pleb
 		{return topic.METHOD_NAME(std::forward<Args>(args)...);} \
 	} METHOD_NAME(method_enum::METHOD_NAME)
 
-#define PLEB_UNCALLABLE_REQUEST_METHOD(METHOD_NAME) \
+#define PLEB_NON_CALLABLE_REQUEST_METHOD(METHOD_NAME) \
 	constexpr pleb::method METHOD_NAME(method_enum::METHOD_NAME)
 
 	/*
@@ -39,6 +46,7 @@ namespace pleb
 	PLEB_FORWARD_TO_TOPIC_PATH(publish);
 
 	PLEB_FORWARD_TO_TOPIC     (serve);
+	
 
 	/*
 		Names like pleb::GET can be used as constants to refer to REST methods
@@ -60,8 +68,27 @@ namespace pleb
 	PLEB_CALLABLE_REQUEST_METHOD(DELETE);
 
 	// Global symbols for methods, which don't currently act as functions.
-	PLEB_UNCALLABLE_REQUEST_METHOD(TRACE);
-	PLEB_UNCALLABLE_REQUEST_METHOD(CONNECT);
+	PLEB_NON_CALLABLE_REQUEST_METHOD(TRACE);
+	PLEB_NON_CALLABLE_REQUEST_METHOD(CONNECT);
+
+
+	/*
+		Event and request forwarding.
+	*/
+	inline std::shared_ptr<event_relay> forward_events(
+		pleb::topic         from,
+		pleb::topic_path    to,
+		subscription_config flags = {})
+	{
+		return from.forward_events(std::move(to), flags);
+	}
+	inline std::shared_ptr<service_relay> forward_requests(
+		pleb::topic         from,
+		pleb::topic         to,
+		service_config      flags = {})
+	{
+		return from.forward_requests(std::move(to), flags);
+	}
 
 #undef PLEB_RESOURCE_VERB
 
