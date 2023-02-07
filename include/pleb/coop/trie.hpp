@@ -130,7 +130,7 @@ namespace coop
 		trie_(std::string_view id, std::shared_ptr<trie_> parent)
 			:
 			_parent(std::move(parent)),
-			_path(_concat(_parent->path(), _parent->_separator, id)), _path_id_pos(unsigned short(_path.length()-id.length())),
+			_path(_concat(_parent->path(), _parent->_separator, id)), _path_id_pos((unsigned short)(_path.length()-id.length())),
 			_separator(_parent->_separator) {}
 
 		class constructor : public trie_

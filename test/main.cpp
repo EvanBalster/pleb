@@ -77,8 +77,8 @@ void printString(const pleb::event &event)
 namespace
 {
 	static auto
-		int2str = pleb::conversion_define([=](int x) -> std::string {return std::to_string(x);}),
-		str2int = pleb::conversion_define([=](const std::string x) -> int {return std::stoi(x);});
+		int2str = pleb::conversion_define([](int x) -> std::string {return std::to_string(x);}),
+		str2int = pleb::conversion_define([](const std::string x) -> int {return std::stoi(x);});
 }
 
 
@@ -128,6 +128,7 @@ int main(int argc, char **argv)
 
 	auto svc_test = std::make_shared<test_service>();
 	auto svc_test_void = pleb::serve("test/void",   svc_test, &test_service::post_void, pleb::method::POST);
+	pleb::bind_service(svc_test, &test_service::post_void, pleb::method::POST);
 	auto svc_test_int  = pleb::serve("test/int",    svc_test, &test_service::post_int, pleb::method::POST);
 	auto svc_test_meth = pleb::serve("test/method", svc_test, &test_service::post_method, pleb::method::POST);
 
@@ -136,8 +137,8 @@ int main(int argc, char **argv)
 	{
 		auto client = std::make_shared<pleb::client>(&test_response_function);
 
-		pleb::topic("test/void")  .POST(client, {});
-		pleb::topic("test/method").POST(client, {});
+		pleb::topic("test/void")  .POST(client);
+		pleb::topic("test/method").POST(client);
 
 		pleb::POST("test/void",   client, std::any());
 		pleb::POST("test/method", client, std::any());

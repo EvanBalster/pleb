@@ -69,7 +69,7 @@ namespace pleb
 	inline auto bind_service(const std::shared_ptr<T> &class_instance, Args&& ... other_args)
 	{
 		// A compile
-		return bind_service(std::weak_ptr(class_instance), std::forward<Args>(other_args)...);
+		return bind_service(std::weak_ptr<T>(class_instance), std::forward<Args>(other_args)...);
 	}
 
 

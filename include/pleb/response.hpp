@@ -86,7 +86,11 @@ namespace pleb
 		template<class T = std_any::any>
 		void respond(topic topic, status status, T &&value = {}, message_flags flags = {}) const
 		{
-			if (func) func(response(std::move(topic), status, std::forward<T>(value), flags));
+			if (func)
+			{
+				response re(std::move(topic), status, std::forward<T>(value), flags);
+				func(re);
+			}
 		}
 	};
 
@@ -120,11 +124,11 @@ namespace pleb
 	class client_promise : public detail::client_promise_base<T>
 	{
 	public:
-		using base = client_promise_base;
+		using base = detail::client_promise_base<T>;
 
 		client_promise(std::future<T> *future)    : client_promise() {if (future) *future = this->get_future();}
 		client_promise() :
-			client_promise_base([this](response &r)
+			base([this](response &r)
 			{
 				try {base::_set(r.move_as<T>());} catch (std::bad_any_cast) {base::_set(std::current_exception());}
 			}) {}

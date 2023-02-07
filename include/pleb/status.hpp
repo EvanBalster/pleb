@@ -97,10 +97,10 @@ namespace pleb
 		status status;
 
 	public:
-		status_exception(pleb::status _status)    : status(_status) {}
-		~status_exception() override              {}
+		status_exception(pleb::status _status)        : status(_status) {}
+		~status_exception() override                  {}
 
-		const char *what() const noexcept         {return status.reasonPhrase().data();}
+		const char *what() const noexcept override    {return status.reasonPhrase().data();}
 	};
 }
 

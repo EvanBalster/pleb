@@ -39,10 +39,20 @@ namespace pleb
 	namespace detail
 	{
 		// Implementation: detect parameter type for non-overloaded unary functors
-		template<typename F>             struct detect_parameter;
-		template<typename R, typename T> struct detect_parameter<std::function<R(T)>> {using type = T;};
+		template<class F, class Enable = void> struct detect_parameter;
+		template<class R, class T> struct detect_parameter<R(*)(T)>             {using type = T;};
+		template<class R, class T> struct detect_parameter<R(*)(T) noexcept>    {using type = T;};
+		template<class R, class T, class C> struct detect_parameter<R(C::*)(T)>                  {using type = T;};
+		template<class R, class T, class C> struct detect_parameter<R(C::*)(T) const>            {using type = T;};
+		template<class R, class T, class C> struct detect_parameter<R(C::*)(T) noexcept>         {using type = T;};
+		template<class R, class T, class C> struct detect_parameter<R(C::*)(T) const noexcept>   {using type = T;};
+		template<class F>
+		struct detect_parameter<F>
+		{
+			using type = typename detect_parameter<decltype(&F::operator())>::type;
+		};
 
-		template<typename F> using detect_parameter_t     = typename detect_parameter<decltype(std::function{std::declval<F>()})>::type;
+		template<typename F> using detect_parameter_t = typename detect_parameter<F>::type;
 	}
 
 

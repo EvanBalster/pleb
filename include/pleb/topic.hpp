@@ -5,18 +5,19 @@
 #include <type_traits>
 #include <functional>
 #include <iosfwd>
+#include <future>
+
+#ifdef PLEB_REPLACEMENT_ANY_HEADER
+	#include PLEB_REPLACEMENT_ANY_HEADER
+#else
+	#include <any>
+#endif
 
 #include "flags.hpp"
 #include "method.hpp"
 #include "status.hpp"
 
 #include "conversion.hpp"
-
-
-namespace std
-{
-	template<class T> class future;
-}
 
 namespace coop
 {
@@ -25,6 +26,12 @@ namespace coop
 
 namespace pleb
 {
+	#ifdef PLEB_REPLACEMENT_ANY_NAMESPACE
+		namespace std_any = ::PLEB_REPLACEMENT_ANY_NAMESPACE;
+	#else
+		namespace std_any = ::std;
+	#endif
+	
 #define PLEB_ND [[nodiscard]] inline
 
 	/*
@@ -60,6 +67,7 @@ namespace pleb
 	using resource_node_ptr = std::shared_ptr<resource_node>;
 
 	resource_node_ptr global_root_resource() noexcept;
+	
 
 	/*
 		client_ref is simply a shared_ptr to a client with additional constructors.
@@ -69,8 +77,8 @@ namespace pleb
 	{
 	public:
 		// 1. No method for responding; response is discarded.
-		constexpr explicit client_ref()          noexcept    {}
-		constexpr          client_ref(nullptr_t) noexcept    {}
+		constexpr explicit client_ref()               noexcept    {}
+		constexpr          client_ref(std::nullptr_t) noexcept    {}
 
 		// 2. Set the provided future to receive the response.
 		template<typename T>
@@ -158,7 +166,7 @@ namespace pleb
 		std::string_view last_id() const noexcept
 		{
 			std::string_view id;
-			for (auto &i : *this) id = i;
+			for (auto i : *this) id = i;
 			return id;
 		}
 
@@ -397,8 +405,8 @@ namespace pleb
 		/*
 			Check if another topic is an ancestor of this one.
 		*/
-		template<typename SubPath>
-		bool is_ancestor_of(topic_<SubPath> other) const noexcept
+		template<typename T>
+		bool is_ancestor_of(topic_<T> other) const noexcept
 		{
 			size_t len = path().length();
 			while (true)
@@ -409,8 +417,8 @@ namespace pleb
 				other._pop();
 			}
 		}
-		template<typename SubPath>
-		bool is_descendant_of(const topic_<SubPath> &other) const noexcept    {return other.is_ancestor_of(*this);}
+		template<typename T>
+		bool is_descendant_of(const topic_<T> &other) const noexcept    {return other.is_ancestor_of(*this);}
 
 
 		/*
@@ -431,7 +439,7 @@ namespace pleb
 			These methods may be called on topic but do nothing.
 			The resource can be forced into existence by converting topic_path to topic.
 		*/
-		topic_& resolve() noexcept    {_resolve(); return *this;}
+		topic_& resolve() noexcept    {this->_resolve(); return *this;}
 		topic_  resolved() const      {auto copy = *this; copy._resolve(); return copy;}
 
 

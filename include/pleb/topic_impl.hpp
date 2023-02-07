@@ -143,7 +143,7 @@ namespace pleb
 		subscriber_function &&f,
 		subscription_config   flags)
 	{
-		auto &node = _realize();
+		auto &node = this->_realize();
 		if constexpr (type_can_be_null) null_topic_error::check(node, "can't subscribe", "(null topic)");
 		auto ptr = node->emplace_subscriber(node, std::move(f), flags);
 		publish(statuses::Created, ptr, flags::announce_receiver | flags::recursive);
@@ -171,7 +171,7 @@ namespace pleb
 		message_flags    flags) const
 	{
 		if constexpr (type_can_be_null) null_topic_error::check(base_t::_nearest_node(), "can't publish", "(null topic)");
-		pleb::event e(*this, status, std::forward<T>(item), flags);
+		pleb::event e(topic_path(*this), status, std::forward<T>(item), flags);
 		publish(e);
 	}
 
@@ -180,7 +180,7 @@ namespace pleb
 		service_function &&function,
 		service_config     flags) noexcept
 	{
-		auto &node = _realize();
+		auto &node = this->_realize();
 		if constexpr (type_can_be_null) null_topic_error::check(node, "can't serve", "(null topic)");
 		auto ptr = node->try_emplace_service(node, std::move(function), flags);
 		if (ptr) publish(statuses::Created, ptr, flags::announce_receiver | flags::recursive);
@@ -281,7 +281,7 @@ namespace pleb
 		}
 	}
 
-	//template<typename P>
+	template<>
 	inline void topic_<void>::_publish_exception(
 		const pleb::event  &msg,
 		const subscription &sub,
@@ -321,7 +321,7 @@ namespace pleb
 		{
 			filtering |= flags::recursive;
 		start_resolved:
-			if (service = node->service_lock()) 
+			if ((service = node->service_lock())) 
 			{
 				if (service->accepts(filtering)) break;
 				service.reset();
@@ -348,7 +348,7 @@ namespace pleb
 	auto topic_<P>::visit_resources(const Callback &callback, size_t recursion_depth, bool skip_this) const
 		-> decltype(callback(std::declval<topic>()), void())
 	{
-		auto &node = _realize();
+		auto &node = this->_realize();
 
 		if constexpr (type_can_be_null)
 			null_topic_error::check(node, "can't visit resources", "(null topic)");
