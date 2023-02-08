@@ -222,4 +222,25 @@ namespace pleb
 			}
 		};
 	}
+
+
+	/*
+		A class with one constructor for each valid signature to bind_service.
+			
+	*/
+	class bound_service_function
+	{
+	public:
+		service_function handler;
+
+
+	public:
+		template<typename... Args, typename Result = decltype(pleb::bind_service(std::declval<Args&&>()...))>
+		bound_service_function(Args&& ... args)
+			:
+			handler(bind_service(std::forward<Args>(args)...))
+		{
+		}
+
+	};
 }

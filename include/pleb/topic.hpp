@@ -67,6 +67,8 @@ namespace pleb
 	using resource_node_ptr = std::shared_ptr<resource_node>;
 
 	resource_node_ptr global_root_resource() noexcept;
+
+	class bound_service_function;
 	
 
 	/*
@@ -207,7 +209,7 @@ namespace pleb
 			const char *preamble = "null topic not allowed",
 			const char *topic_name = "(null resource_node_ptr)")
 		{
-			if (!p) throw null_topic_error(preamble, topic_name);
+			if (!p.get()) throw null_topic_error(preamble, topic_name);
 			return p;
 		}
 	};
@@ -498,6 +500,19 @@ namespace pleb
 
 
 		/*
+			SERVE this resource, with some automatic glue code to make life easier.
+
+			The service_binding type is designed solely for use in functions like this.
+				Enclose arguments in {braces} and they will be passed to bind_service(...).
+				This allows a service function to wrap a weak pointer and class method.
+				See bind.hpp for available bindings and their arguments.
+		*/
+		[[nodiscard]] std::shared_ptr<service> serve(
+			bound_service_function handler,
+			service_config         flags = {});
+
+
+		/*
 			Create a service which forwards requests to another topic.
 				Forwarding will continue as long as the returned pointer is held.
 				Responses will refer to the service topic, not the forwarding one.
@@ -508,29 +523,6 @@ namespace pleb
 		std::shared_ptr<service_relay> forward_requests(
 			topic          service_topic,
 			service_config flags = {});
-
-
-		/*
-			SERVE this resource, with some automatic glue code to make life easier.
-			
-			Refer to bind_service(...) in bind.hpp for possible arguments.
-				bind.hpp should be included to enable these overloads.
-		*/
-		//template<typename ... Args,                        typename Valid = std::void_t<decltype(pleb::bind_service(std::declval<Args>()...))>>
-
-		template<typename ... Args>
-		auto serve(Args&& ... args)
-			->                               decltype(pleb::bind_service(std::declval<Args&&>()...), service_ptr())
-		{
-			return serve(pleb::bind_service(std::forward<Args>(args)...));
-		}
-
-		template<typename ... Args>
-		auto serve(service_config flags, Args&& ... args)
-			->                               decltype(pleb::bind_service(std::declval<Args&&>()...), service_ptr())
-		{
-			return serve(pleb::bind_service(std::forward<Args>(args)...), flags);
-		}
 
 
 		/*

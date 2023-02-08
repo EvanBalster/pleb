@@ -1,7 +1,6 @@
 #pragma once
 
 
-#include "bind.hpp"
 #include "topic_impl.hpp"
 
 
@@ -45,7 +44,15 @@ namespace pleb
 	PLEB_FORWARD_TO_TOPIC     (subscribe);
 	PLEB_FORWARD_TO_TOPIC_PATH(publish);
 
-	PLEB_FORWARD_TO_TOPIC     (serve);
+	[[nodiscard]] inline std::shared_ptr<service> serve(
+		topic                  topic,
+		service_function       handler,
+		service_config         flags = {})            {return topic.serve(std::move(handler), flags);}
+
+	[[nodiscard]] inline std::shared_ptr<service> serve(
+		topic                  topic,
+		bound_service_function handler,
+		service_config         flags = {})            {return topic.serve(std::move(handler), flags);}
 	
 
 	/*

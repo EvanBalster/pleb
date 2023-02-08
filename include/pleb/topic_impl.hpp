@@ -1,10 +1,8 @@
 #pragma once
 
 
+#include "bind.hpp"
 #include "resource_node.hpp"
-
-#include "request.hpp"
-#include "event.hpp"
 
 
 /*
@@ -185,6 +183,14 @@ namespace pleb
 		auto ptr = node->try_emplace_service(node, std::move(function), flags);
 		if (ptr) publish(statuses::Created, ptr, flags::announce_receiver | flags::recursive);
 		return ptr;
+	}
+
+	template<typename P> [[nodiscard]]
+	std::shared_ptr<service> topic_<P>::serve(
+		bound_service_function handler,
+		service_config         flags)
+	{
+		return serve(std::move(handler.handler), flags);
 	}
 
 	template<typename P>
