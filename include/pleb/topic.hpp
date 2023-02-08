@@ -90,7 +90,9 @@ namespace pleb
 		client_ref(response_function &&f);
 
 		// 4. Pass a client object to handle the response.
-		using client_ptr::client_ptr;
+		client_ref(std::shared_ptr<client>      &&ptr)    : shared_ptr(std::move(ptr)) {}
+		client_ref(const std::shared_ptr<client> &ptr)    : shared_ptr(ptr)            {}
+		using shared_ptr::shared_ptr;
 	};
 
 

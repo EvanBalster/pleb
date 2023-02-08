@@ -140,9 +140,9 @@ int main(int argc, char **argv)
 		pleb::topic("test/void")  .POST(client);
 		pleb::topic("test/method").POST(client);
 
-		pleb::POST("test/void",   client, std::any());
-		pleb::POST("test/method", client, std::any());
-		pleb::POST("test/proxy", client, std::any());
+		pleb::POST("test/void",   client);
+		pleb::POST("test/method", client);
+		pleb::POST("test/proxy", client);
 
 		pleb::response resp = pleb::POST("test/method");
 
