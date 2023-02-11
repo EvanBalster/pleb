@@ -319,7 +319,7 @@ namespace pleb
 		void             _push(topic_view subpath);
 		void             _pop () noexcept;
 		std::string_view _back() const noexcept    {return topic_view(_path).last_id();}
-		std::string_view _view() const             {return _path;}
+		std::string_view _view() const noexcept    {return _path;}
 	};
 
 
