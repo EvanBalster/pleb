@@ -7,15 +7,10 @@
 #include <iosfwd>
 #include <future>
 
-#ifdef PLEB_REPLACEMENT_ANY_HEADER
-	#include PLEB_REPLACEMENT_ANY_HEADER
-#else
-	#include <any>
-#endif
-
 #include "flags.hpp"
 #include "method.hpp"
 #include "status.hpp"
+#include "content.hpp"
 
 #include "conversion.hpp"
 
@@ -281,7 +276,7 @@ namespace pleb
 		void             _push(topic_view subpath);
 		void             _pop ();
 		std::string_view _back() const noexcept;
-		std::string_view _view() const;
+		std::string_view _view() const noexcept;
 	};
 	template<> class topic_base_<lazy_path>
 	{
@@ -431,7 +426,13 @@ namespace pleb
 				path() returns the complete path, with no redundant slashes.
 		*/
 		std::string_view id  () const noexcept    {return base_t::_back();}
-		std::string_view path() const             {return base_t::_view();}
+		std::string_view path() const noexcept    {return base_t::_view();}
+		
+		/*
+			Topics are string-like and may be implicitly converted to strings.
+		*/
+		operator std::string_view() const noexcept    {return path();}
+		operator std::string     () const noexcept    {return std::string(path());}
 
 
 		/*
@@ -533,16 +534,16 @@ namespace pleb
 				The response target will receive a response, now or later.
 				If there is no service, pleb::service_not_found is thrown.
 		*/
-		template<class V = std::any>
+		template<class V = std_any::any>
 		void request(client_ref client, method method, V &&value = {}) const;
 
-		/* */                        void GET   (client_ref c)                 const    {return request(c, method::GET);}
-		/* */                        void HEAD  (client_ref c)                 const    {return request(c, method::HEAD);}
-		/* */                        void OPTIONS(client_ref c)                const    {return request(c, method::OPTIONS);}
-		template<class V = std::any> void PUT   (client_ref c, V &&value)      const    {return request(c, method::PUT,    std::forward<V>(value));}
-		template<class V = std::any> void POST  (client_ref c, V &&value = {}) const    {return request(c, method::POST,   std::forward<V>(value));}
-		template<class V = std::any> void PATCH (client_ref c, V &&value)      const    {return request(c, method::PATCH,  std::forward<V>(value));}
-		/* */                        void DELETE(client_ref c)                 const    {return request(c, method::DELETE);}
+		/* */                            void GET   (client_ref c)                 const    {return request(c, method::GET);}
+		/* */                            void HEAD  (client_ref c)                 const    {return request(c, method::HEAD);}
+		/* */                            void OPTIONS(client_ref c)                const    {return request(c, method::OPTIONS);}
+		template<class V = std_any::any> void PUT   (client_ref c, V &&value)      const    {return request(c, method::PUT,    std::forward<V>(value));}
+		template<class V = std_any::any> void POST  (client_ref c, V &&value = {}) const    {return request(c, method::POST,   std::forward<V>(value));}
+		template<class V = std_any::any> void PATCH (client_ref c, V &&value)      const    {return request(c, method::PATCH,  std::forward<V>(value));}
+		/* */                            void DELETE(client_ref c)                 const    {return request(c, method::DELETE);}
 
 		/*
 			Convenience API for requests.
@@ -552,18 +553,18 @@ namespace pleb
 			- calling await<T>
 			- calling push() or issue(client) -- auto_retrieve only.
 		*/
-		template<class V = std::any>
+		template<class V = std_any::any>
 		auto_request request(method method, V &&value = {}) const;
-		template<class V = std::any>
+		template<class V = std_any::any>
 		auto_retrieve retrieve(method method, V &&value = {}) const;
 
-		/* */                       auto_retrieve GET   ()               const;
-		/* */                       auto_retrieve HEAD  ()               const;
-		/* */                       auto_retrieve OPTIONS()              const;
-		template<class V = std::any> auto_request PUT   (V &&value)      const;
-		template<class V = std::any> auto_request POST  (V &&value = {}) const;
-		template<class V = std::any> auto_request PATCH (V &&value)      const;
-		/* */                        auto_request DELETE()               const;
+		/* */                            auto_retrieve GET   ()               const;
+		/* */                            auto_retrieve HEAD  ()               const;
+		/* */                            auto_retrieve OPTIONS()              const;
+		template<class V = std_any::any> auto_request PUT   (V &&value)      const;
+		template<class V = std_any::any> auto_request POST  (V &&value = {}) const;
+		template<class V = std_any::any> auto_request PATCH (V &&value)      const;
+		/* */                            auto_request DELETE()               const;
 
 #if 0
 		/*
@@ -571,16 +572,16 @@ namespace pleb
 				There is no mechanism for a direct reply (this may improve performance).
 				If there is no service, pleb::service_not_found is thrown.
 		*/
-		template<class V = std::any>
+		template<class V = std_any::any>
 		void push(method method, V &&value = {})
 		{
 			request(nullptr, method, std::forward<V>(value));
 		}
 
-		template<class V = std::any> void push_PUT   (V &&value)         {push(method::PUT,   std::forward<V>(value));}
-		template<class V = std::any> void push_POST  (V &&value = {})    {push(method::POST,  std::forward<V>(value));}
-		template<class V = std::any> void push_PATCH (V &&value)         {push(method::PATCH, std::forward<V>(value));}
-		/* */                        void push_DELETE()                  {push(method::DELETE);}
+		template<class V = std_any::any> void push_PUT   (V &&value)         {push(method::PUT,   std::forward<V>(value));}
+		template<class V = std_any::any> void push_POST  (V &&value = {})    {push(method::POST,  std::forward<V>(value));}
+		template<class V = std_any::any> void push_PATCH (V &&value)         {push(method::PATCH, std::forward<V>(value));}
+		/* */                            void push_DELETE()                  {push(method::DELETE);}
 #endif
 
 

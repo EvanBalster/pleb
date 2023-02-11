@@ -35,7 +35,7 @@ namespace pleb
 
 
 	public:
-		template<typename T = std::any>
+		template<typename T = std_any::any>
 		response(
 			const topic_path &topic, // Topic of the request (also provides handling rules)
 			pleb::status      status,
@@ -100,7 +100,7 @@ namespace pleb
 		An implementation of client adapting it to C++ futures and promises.
 		
 		Unless T is pleb::response, non-success statuses will become exceptions.
-		Unless T is std::any, mismatched response types may throw std::bad_any_cast.
+		Unless T is std::any, mismatched response types may throw bad_any_cast.
 	*/
 	namespace detail
 	{
@@ -130,7 +130,7 @@ namespace pleb
 		client_promise() :
 			base([this](response &r)
 			{
-				try {base::_set(r.move_as<T>());} catch (std::bad_any_cast) {base::_set(std::current_exception());}
+				try {base::_set(r.move_as<T>());} catch (std_any::bad_any_cast) {base::_set(std::current_exception());}
 			}) {}
 	};
 

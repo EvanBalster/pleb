@@ -59,17 +59,17 @@ namespace pleb
 		message(
 			const topic_path &topic,
 			code_t            code,
-			std::any        &&value,
+			std_any::any    &&value,
 			message_flags     flags)
 			:
 			message_base(topic, code, flags),
 			content(std::move(value)) {}
 
 		message(
-			const topic_path &topic,
-			code_t            code,
-			const std::any   &value,
-			message_flags     flags)
+			const topic_path   &topic,
+			code_t              code,
+			const std_any::any &value,
+			message_flags       flags)
 			:
 			message_base(topic, code, flags),
 			content(value) {}

@@ -32,7 +32,7 @@ namespace pleb
 		
 
 	public:
-		template<typename T = std::any>
+		template<typename T = std_any::any>
 		event(
 			const topic_path &topic,
 			pleb::status      status,

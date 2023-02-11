@@ -134,7 +134,7 @@ namespace pleb
 				issuing_response = true;
 				detail::respond_with(request, std::forward<Return>(v), default_response_status);
 			}
-			catch (std::bad_any_cast&)
+			catch (std_any::bad_any_cast&)
 			{
 				if (issuing_response) throw; // (rethrow)
 				else request.respond_UnsupportedMediaType();
@@ -160,7 +160,7 @@ namespace pleb
 				(s.get()->*class_method) (detail::msg_decompose<Params>::pass(request)...);
 				request.respond(default_response_status);
 			}
-			catch (std::bad_any_cast&)
+			catch (std_any::bad_any_cast&)
 			{
 				request.respond_UnsupportedMediaType();
 			}
@@ -187,7 +187,7 @@ namespace pleb
 				issuing_response = true;
 				detail::respond_with(request, std::forward<Return>(v), default_response_status);
 			}
-			catch (std::bad_any_cast&)
+			catch (std_any::bad_any_cast&)
 			{
 				if (issuing_response) throw; // (rethrow)
 				else request.respond_UnsupportedMediaType();
@@ -216,7 +216,7 @@ namespace pleb
 				if (!(request.features & flags::did_respond))
 					request.respond(default_response_status);
 			}
-			catch (std::bad_any_cast&)
+			catch (std_any::bad_any_cast&)
 			{
 				request.respond_UnsupportedMediaType();
 			}

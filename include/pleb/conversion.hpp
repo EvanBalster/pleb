@@ -2,7 +2,7 @@
 
 
 // Type erasure and runtime type information.
-#include <any>
+#include "content.hpp"
 #include <typeinfo>
 #include <typeindex>
 
@@ -82,7 +82,7 @@ namespace pleb
 			Convert a std::any containing the input type to one containing the result type.
 			This is rarely useful.
 		*/
-		virtual std::any convert_any(const std::any&) const = 0;
+		virtual std_any::any convert_any(const std_any::any&) const = 0;
 	};
 
 	/*
@@ -102,13 +102,13 @@ namespace pleb
 
 		/*
 			Convert a std::any to the result type.
-			May throw std::bad_any_cast if the parameter contains an unexpected type.
+			May throw bad_any_cast if the parameter contains an unexpected type.
 		*/
-		virtual result_type convert(const std::any&) const = 0;
+		virtual result_type convert(const std_any::any&) const = 0;
 
 
 		// Implementation of base class
-		std::any convert_any(const std::any &x) const override    {return std::any(convert(x));}
+		std_any::any convert_any(const std_any::any &x) const override    {return std_any::any(convert(x));}
 	};
 
 	/*
@@ -134,7 +134,7 @@ namespace pleb
 
 
 		// Implementation of base class
-		result_type convert(const std::any &x) const override    {return convert(std::any_cast<const input_type&>(x));}
+		result_type convert(const std_any::any &x) const override    {return convert(std_any::any_cast<const input_type&>(x));}
 	};
 
 	/*
@@ -156,9 +156,9 @@ namespace pleb
 		impl(Functor &&func)    : _f{std::forward<Functor>(func)} {}
 
 		// Implementation
-		result_type  convert(const input_type &x) const final    {return _f(x);}
-		result_type  convert(const std::any   &x) const final    {return _f(std::any_cast<const input_type&>(x));}
-		std::any convert_any(const std::any   &x) const final    {return _f(std::any_cast<const input_type&>(x));}
+		result_type  convert    (const input_type   &x) const final    {return _f(x);}
+		result_type  convert    (const std_any::any &x) const final    {return _f(std_any::any_cast<const input_type&>(x));}
+		std_any::any convert_any(const std_any::any &x) const final    {return _f(std_any::any_cast<const input_type&>(x));}
 	};
 
 
@@ -227,18 +227,18 @@ namespace pleb
 				convert(...) throws no_conversion_rule if no rule is defined.
 				try_convert(...) returns a default value if no rule is defined.
 		*/
-		std::any convert(const std::any &x, std::type_index to_type) const                                       {return get(to_type, x.type())->convert_any(x);}
+		std_any::any convert(const std_any::any &x, std::type_index to_type) const                                           {return get(to_type, x.type())->convert_any(x);}
 		template<typename To>
-		To       convert(const std::any &x) const                                                                {return get<To>(x.type())->convert(x);}
+		To           convert(const std_any::any &x) const                                                                    {return get<To>(x.type())->convert(x);}
 		template<typename To, typename From>
-		To       convert(const From     &x) const                                                                {return get<To, From>()->convert(x);}
+		To           convert(const From         &x) const                                                                    {return get<To, From>()->convert(x);}
 
-		std::any try_convert(const std::any &x, std::type_index to_type, const std::any &on_error = {}) const    {auto r=find(to_type,x.type()); if (!r) return on_error; else return r->convert_any(x);}
-		std::any try_convert(const std::any &x, const std::any &on_error) const                                  {return try_convert(x, on_error.type(), on_error);}
+		std_any::any try_convert(const std_any::any &x, std::type_index to_type, const std_any::any &on_error = {}) const    {auto r=find(to_type,x.type()); if (!r) return on_error; else return r->convert_any(x);}
+		std_any::any try_convert(const std_any::any &x, const std_any::any &on_error) const                                  {return try_convert(x, on_error.type(), on_error);}
 		template<typename To>
-		To       try_convert(const std::any &x, const To  &on_error = {}) const                                  {auto r=find<To>(x.type()); if (!r) return on_error; else return r->convert(x);}
+		To           try_convert(const std_any::any &x, const To  &on_error = {}) const                                      {auto r=find<To>(x.type()); if (!r) return on_error; else return r->convert(x);}
 		template<typename To, typename From>
-		To       try_convert(const From     &x, const To  &on_error = {}) const                                  {auto r=find<To, From>(); if (!r) return on_error; else return r->convert(x);}
+		To           try_convert(const From         &x, const To  &on_error = {}) const                                      {auto r=find<To, From>(); if (!r) return on_error; else return r->convert(x);}
 		
 
 

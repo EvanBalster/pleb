@@ -56,7 +56,7 @@ namespace pleb
 			Compose a request manually.
 				If a client is supplied, the request will occur immediately.
 		*/
-		template<typename T = std::any>
+		template<typename T = std_any::any>
 		request(
 			client_ref        client,
 			const topic_path &topic,
@@ -184,7 +184,7 @@ namespace pleb
 		/*
 			auto_request is constructed without a client reference.
 		*/
-		template<typename T = std::any>
+		template<typename T = std_any::any>
 		auto_request(
 			pleb::topic    topic,
 			pleb::method   method,
@@ -218,7 +218,7 @@ namespace pleb
 			eg:  std::future<response> result = pleb::GET("/resource/1");
 
 			When using types other than pleb::response, status is discarded
-			and a response of incompatible type will throw std::bad_any_cast.
+			and a response of incompatible type will throw bad_any_cast.
 		*/
 		template<typename Response>
 		operator std::future<Response>()    {return this->async<Response>();}
@@ -230,7 +230,7 @@ namespace pleb
 			eg:  auto resultText = std::string(pleb::POST("/resource/1", ""));
 			
 			When using types other than pleb::response, status is discarded
-			and a response of incompatible type will throw std::bad_any_cast.
+			and a response of incompatible type will throw bad_any_cast.
 		*/
 		template<typename T>
 		explicit operator T()    {return this->await<T>();}

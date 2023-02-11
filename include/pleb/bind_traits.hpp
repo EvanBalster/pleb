@@ -19,20 +19,20 @@ namespace pleb
 			static constexpr bool uses_value = true;
 
 			static T        pass(      message &m)    {return m.move_as<T>();}
-			static const T& pass(const message &m)    {auto p=m.get<T>();         if (!p) throw std::bad_any_cast(); return p;}
+			static const T& pass(const message &m)    {auto p=m.get<T>();         if (!p) throw std_any::bad_any_cast(); return p;}
 
-			static T&       view(      message &m)    {auto p=m.get_mutable<T>(); if (!p) throw std::bad_any_cast(); return p;}
+			static T&       view(      message &m)    {auto p=m.get_mutable<T>(); if (!p) throw std_any::bad_any_cast(); return p;}
 		};
 
 		template<typename T>
-		struct msg_decompose<T, std::enable_if_t<std::is_same_v<std::any, std::decay_t<T>>>>
+		struct msg_decompose<T, std::enable_if_t<std::is_same_v<std_any::any, std::decay_t<T>>>>
 		{
 			static constexpr bool uses_value = true;
 
 			static T        pass(      message &m)    {return m.move_as<T>();}
-			static const T& pass(const message &m)    {auto p=m.get<T>();         if (!p) throw std::bad_any_cast(); return p;}
+			static const T& pass(const message &m)    {auto p=m.get<T>();         if (!p) throw std_any::bad_any_cast(); return p;}
 
-			static T&       view(      message &m)    {auto p=m.get_mutable<T>(); if (!p) throw std::bad_any_cast(); return p;}
+			static T&       view(      message &m)    {auto p=m.get_mutable<T>(); if (!p) throw std_any::bad_any_cast(); return p;}
 		};
 
 		template<>

@@ -131,7 +131,7 @@ namespace pleb
 		return _nearest;
 	}
 
-	inline std::string_view topic_base_<void>::_view() const
+	inline std::string_view topic_base_<void>::_view() const noexcept
 	{
 		return _node ? _node->path() : "<null>";
 	}

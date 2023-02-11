@@ -75,17 +75,17 @@ namespace pleb
 	public:
 		content() = default;
 
-		content(std::any &&value)         : _value(std::move(value)) {}
-		content(const std::any &value)    : _value(value) {}
+		content(std_any::any &&value)         : _value(std::move(value)) {}
+		content(const std_any::any &value)    : _value(value) {}
 
 
 		// Access the value's generic container.
-		std::any       &value()       noexcept    {return _value;}
-		const std::any &value() const noexcept    {return _value;}
+		std_any::any       &value()       noexcept    {return _value;}
+		const std_any::any &value() const noexcept    {return _value;}
 
 
 		// Attempt to move the contained value.  Throws any_cast on failure.
-		template<class T> T        move_as()                       {return std::any_cast<T>(std::move(_value));}
+		template<class T> T        move_as()                       {return std_any::any_cast<T>(std::move(_value));}
 
 
 		// Access value as a specific type.  Only succeeds if the type is an exact match.

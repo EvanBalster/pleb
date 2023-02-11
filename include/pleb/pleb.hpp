@@ -114,11 +114,11 @@ namespace pleb
 			convert(...) throws no_conversion_rule if no rule is defined.
 			try_convert(...) returns a default value if no rule is defined.
 	*/
-	inline std::any convert(const std::any &x, std::type_index to_type)                                       {return conversion_rules()->convert(x,to_type);}
+	inline std_any::any convert(const std_any::any &x, std::type_index to_type)                                           {return conversion_rules()->convert(x,to_type);}
 	template<typename To, typename From>
-	To              convert(const From     &x)                                                                {return conversion_rules()->convert<To>(x);}
+	To                  convert(const From     &x)                                                                        {return conversion_rules()->convert<To>(x);}
 
-	inline std::any try_convert(const std::any &x, std::type_index to_type, const std::any &on_error = {})    {return conversion_rules()->try_convert(x, to_type, on_error);}
+	inline std_any::any try_convert(const std_any::any &x, std::type_index to_type, const std_any::any &on_error = {})    {return conversion_rules()->try_convert(x, to_type, on_error);}
 	template<typename To, typename From>
-	To              try_convert(const From     &x, const To &on_error = {})                                   {return conversion_rules()->try_convert(x, on_error);}
+	To                  try_convert(const From     &x, const To &on_error = {})                                           {return conversion_rules()->try_convert(x, on_error);}
 }

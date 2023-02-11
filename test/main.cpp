@@ -95,6 +95,9 @@ constexpr pseudo_int<2> pseudo_TWO;
 
 int main(int argc, char **argv)
 {
+	using pleb::std_any::any;
+	using pleb::std_any::any_cast;
+	
 	switch (argc)
 	{
 		case pseudo_ZERO: std::cout << "NO ARGS" << std::endl; break;
@@ -114,7 +117,7 @@ int main(int argc, char **argv)
 		//std::cout << "Registered conversion function: " << typeid(*stored.get()).name() << std::endl;
 
 		std::cout << "Converts int(5) to: `" << pleb::convert<std::string>(5) << "'" << std::endl;
-		std::cout << "Converts any(5) to: `" << pleb::convert<std::string>(std::any(5)) << "'" << std::endl;
+		std::cout << "Converts any(5) to: `" << pleb::convert<std::string>(any(5)) << "'" << std::endl;
 
 		std::cout << "Converts \"5\"s to: `" << pleb::convert<int>(std::string("5")) << "'" << std::endl;
 
@@ -146,14 +149,14 @@ int main(int argc, char **argv)
 
 		pleb::response resp = pleb::POST("test/method");
 
-		std::any int_holder;
+		any int_holder;
 		for (int tries = 0; tries < 2; ++tries)
 		{
 			std::cout << "Requesting post_int" << std::endl;
 			pleb::POST("test/int", client, int_holder);
-			int_holder.emplace<int>(13);
+			int_holder = 13;
 			std::cout << "\tRequest now holds " << int_holder.type().name()
-				<< ": " << std::any_cast<int>(int_holder) << std::endl;
+				<< ": " << any_cast<int>(int_holder) << std::endl;
 		}
 		
 
