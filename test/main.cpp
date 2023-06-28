@@ -7,6 +7,8 @@
 #include <pleb/pleb.hpp>
 //#include <pleb/resource.h>
 
+using namespace pleb::literals;
+
 #if 0
 class pool_tester;
 using test_pool_t = aro::pool<pool_tester>;
@@ -139,14 +141,15 @@ int main(int argc, char **argv)
 	{
 		auto client = std::make_shared<pleb::client>(&test_response_function);
 
-		pleb::topic("test/void")  .POST(client);
-		pleb::topic("test/method").POST(client);
+		"test/void"_topic  .POST(client);
+		"test/method"_topic.POST(client);
 
-		pleb::POST("test/void",   client);
-		pleb::POST("test/method", client);
-		pleb::POST("test/proxy", client);
+		pleb::POST("test/void",             client);
+		pleb::POST("test/method"_topic,     client);
+		pleb::POST("test/proxy"_topic_path, client);
 
 		pleb::response resp = pleb::POST("test/method");
+		pleb::response resp2 = pleb::POST({"test", "method"});
 
 		any int_holder;
 		for (int tries = 0; tries < 2; ++tries)

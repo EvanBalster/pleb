@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <initializer_list>
 #include <string_view>
 #include <type_traits>
 #include <functional>
@@ -189,6 +190,18 @@ namespace pleb
 		};
 		using topic_runtime_error = topic_exception<std::runtime_error>;
 		using topic_logic_error = topic_exception<std::logic_error>;
+
+		// Topic fragments are used when brace-initializing a topic from multiple parts.
+		class topic_fragment
+		{
+		public:
+			topic_fragment(const std::string &s)    : str(s) {}
+			topic_fragment(std::string_view   s)    : str(s) {}
+			topic_fragment(const char        *s)    : str(s) {}
+
+		public:
+			std::string_view str;
+		};
 	}
 
 
@@ -247,7 +260,7 @@ namespace pleb
 		topic_base_()  : _node(nullptr) {}
 		~topic_base_() = default;
 
-		topic_base_(                               std::string_view    path) noexcept    : _node(global_root_resource()) {_push(   path);}
+		topic_base_(std::string_view path) noexcept    : _node(global_root_resource()) {_push(path);}
 
 		explicit operator bool() const noexcept    {return bool(_node);}
 
@@ -284,7 +297,7 @@ namespace pleb
 		topic_base_()  : _nearest(global_root_resource()) {}
 		~topic_base_() = default;
 
-		topic_base_(                               std::string_view    path)    : _nearest(global_root_resource()) {_push(   path); _resolve();}
+		topic_base_(std::string_view path)    : _nearest(global_root_resource()) {_push(path); _resolve();}
 
 		// Conversion with pathless topic
 		topic_base_(const topic_base_<void> &o);
@@ -324,7 +337,8 @@ namespace pleb
 
 
 	/*
-		Topics form a global hierarchy (trie) to which 
+		Topic is a string-like reference to a resource in a filesystem-like hierarchy.
+			It can be used to send and receive within across a process.
 	*/
 	template<class SubPath>
 	class topic_ :
@@ -362,17 +376,19 @@ namespace pleb
 		~topic_() = default;
 
 		// Look up a resource within the given resource node.
-		topic_(resource_node_ptr node)                              : base_t(std::move(node)) {}
-		topic_(resource_node_ptr node, topic_view       subpath)    : base_t(std::move(node), subpath.string) {}
-		topic_(resource_node_ptr node, std::string      subpath)    : base_t(std::move(node), std::string_view(subpath)) {}
-		topic_(resource_node_ptr node, std::string_view subpath)    : base_t(std::move(node), std::string_view(subpath)) {}
-		topic_(resource_node_ptr node, const char      *subpath)    : base_t(std::move(node), std::string_view(subpath)) {}
+		topic_(resource_node_ptr node)                                : base_t(std::move(node)) {}
+		topic_(resource_node_ptr node, topic_view         subpath)    : base_t(std::move(node), subpath.string) {}
+		topic_(resource_node_ptr node, const std::string &subpath)    : base_t(std::move(node), std::string_view(subpath)) {}
+		topic_(resource_node_ptr node, std::string_view   subpath)    : base_t(std::move(node), std::string_view(subpath)) {}
+		topic_(resource_node_ptr node, const char        *subpath)    : base_t(std::move(node), std::string_view(subpath)) {}
 
-		// Look up a resource by its path.
+		// Specify a resource by its path.
 		topic_(topic_view         topic)                            : base_t(topic.string) {}
 		topic_(const std::string& topic)                            : base_t(std::string_view(topic)) {}
 		topic_(std::string_view   topic)                            : base_t(std::string_view(topic)) {}
 		topic_(const char*        topic)                            : base_t(std::string_view(topic)) {}
+
+		topic_(std::initializer_list<detail::topic_fragment> parts)    {for (auto &p : parts) {_push(p.str);} _resolve();}
 
 
 		// Convert between topic and topic_path.
@@ -675,5 +691,13 @@ namespace pleb
 			static auto t = std::make_shared<conversion_table>();
 			return t;
 		}
+	}
+
+
+	namespace literals
+	{
+		inline topic operator ""_pleb      (const char *path, size_t size)    {return topic     (std::string_view(path, size));}
+		inline topic operator ""_topic     (const char *path, size_t size)    {return topic     (std::string_view(path, size));}
+		inline topic operator ""_topic_path(const char *path, size_t size)    {return topic_path(std::string_view(path, size));}
 	}
 }
