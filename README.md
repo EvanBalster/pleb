@@ -1,17 +1,23 @@
 # PLEB (Process-Local Event Bus)
-⚠ This library is in early development.  The API is subject to change.
+⚠ This library is in early development.  The API may be subject to change.
 
-PLEB is a header-only library extending C++17 with patterns from network programming.  It provides a concurrent global **resource tree** similar to the index of a web server, implementing Request-Reply and Publish-Subscribe messaging patterns as lightweight function calls using any data structure.
+PLEB is a header-only library extending C++17 with useful patterns from network programming.  It provides a multi-threaded **topic tree** similar to resources provided by a web server.  This allows different parts of a program to exchange events and queries with minimal overhead.
 
-PLEB does not replace messaging frameworks like ZeroMQ and NNG; rather, it provides a tailored API that can act as a front-end to these.  Where traditional frameworks treat in-process communication as a special case of network sockets, PLEB allows us to do the opposite by using local resources as an interface to remote ones.
+```C++
+
+```
 
 PLEB's design is based on the following observations:
 
-1. Request-Reply (REST) and Publish-Subscribe are excellent patterns for messaging and error handling — not only across networks. but also within programs with various modules or threads.
-2. Unlike socket messages, in-process messages do not necessarily need serialization or queueing.
-3. Global pathnames are more manageable than references or GUIDs when communicating across a complex program.
+1. Request-Reply (REST) and Publish-Subscribe are excellent patterns for messaging and error handling — not only across networks, but also within programs made up of various modules or threads.
+2. Unlike socket messages, in-process messages work in a shared memory space.  Serialization and message queueing are frequently unnecessary in these contexts.
+3. Hierarchical resource names are more manageable than pointers or GUIDs when communicating across a complex program.
 
-Messages are realized as function calls using `std::any` as a container.  PLEB is multi-threaded and (mostly†) wait-free, meaning it can be used for extremely time-sensitive concurrent applications such as audio processing.  While PLEB is designed for concurrent programming, and is thread-safe for purposes of setting up the resource tree and issuing messages, it imposes no locks or queueing of its own on messages — the application is expected to impose its own concurrency measures.
+PLEB does is not a substitute for messaging frameworks like ZeroMQ and NNG; rather, it provides a tailored API that can act as a front-end to these.  Where traditional frameworks treat in-process communication as a special case of network sockets, PLEB does the opposite: it provides in-process 'topics' as a uniform interface to resources inside and outside a running program.
+
+## Lightweight, Lock-Free
+
+Messages in PLEB are realized as function calls which can pass any (as in`std::any`) C++ type.  PLEB is multi-threaded and (mostly†) wait-free, meaning it can be used for extremely time-sensitive concurrent applications such as audio processing.  While PLEB is designed for concurrent programming, and is thread-safe for purposes of setting up the resource tree and issuing messages, it imposes no locks or queueing of its own on messages — the application is expected to impose its own concurrency measures.
 
 *† Pending integration of a suitable wait-free table, PLEB's resource tree uses locking operations when adding or finding paths in the resource tree.  Serving, subscribing, requesting, responding and publishing are wait-free.*
 

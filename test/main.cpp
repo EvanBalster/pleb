@@ -130,9 +130,8 @@ int main(int argc, char **argv)
 	}
 
 	auto svc_test = std::make_shared<test_service>();
-	auto svc_test_void = pleb::serve("test/void",   {svc_test, &test_service::post_void, pleb::method::POST});
-	pleb::bind_service(svc_test, &test_service::post_void, pleb::method::POST);
-	auto svc_test_int  = pleb::serve("test/int",    {svc_test, &test_service::post_int, pleb::method::POST});
+	auto svc_test_void = pleb::serve("test/void",   {svc_test, &test_service::post_void,   pleb::method::POST});
+	auto svc_test_int  = pleb::serve("test/int",    {svc_test, &test_service::post_int,    pleb::method::POST});
 	auto svc_test_meth = pleb::serve("test/method", {svc_test, &test_service::post_method, pleb::method::POST});
 
 	auto svc_test_proxy = pleb::forward_requests("test/proxy", "test/method");

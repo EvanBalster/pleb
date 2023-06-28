@@ -13,26 +13,6 @@
 
 namespace pleb
 {
-#define PLEB_FORWARD_TO_TOPIC(METHOD_NAME) \
-	template<typename... Args> auto METHOD_NAME(pleb::topic topic, Args&& ... args) -> \
-		decltype(topic.METHOD_NAME(std::forward<Args>(args)...)) \
-		{return topic.METHOD_NAME(std::forward<Args>(args)...);}
-
-#define PLEB_FORWARD_TO_TOPIC_PATH(METHOD_NAME) \
-	template<typename... Args> auto METHOD_NAME(const topic_path &topic, Args&& ... args) -> \
-		decltype(topic.METHOD_NAME(std::forward<Args>(args)...)) \
-		{return topic.METHOD_NAME(std::forward<Args>(args)...);}
-
-#define PLEB_CALLABLE_REQUEST_METHOD(METHOD_NAME) \
-	constexpr class : public pleb::method { using method::method; public: \
-		template<typename... Args> auto operator()(const topic_path &topic, Args&& ... args) const -> \
-		decltype(topic.METHOD_NAME(std::forward<Args>(args)...)) \
-		{return topic.METHOD_NAME(std::forward<Args>(args)...);} \
-	} METHOD_NAME(method_enum::METHOD_NAME)
-
-#define PLEB_NON_CALLABLE_REQUEST_METHOD(METHOD_NAME) \
-	constexpr pleb::method METHOD_NAME(method_enum::METHOD_NAME)
-
 	/*
 		These global methods forward to methods of topic.
 
@@ -41,19 +21,28 @@ namespace pleb
 
 		e.g:  auto my_subscription = pleb::subscribe("topic/1");
 	*/
-	PLEB_FORWARD_TO_TOPIC     (subscribe);
-	PLEB_FORWARD_TO_TOPIC_PATH(publish);
+	template<typename... Args> [[nodiscard]]
+	std::shared_ptr<subscription> subscribe(
+		pleb::topic topic,
+		Args&&  ... args)                             {return topic.subscribe(std::forward<Args>(args)...);}
 
-	[[nodiscard]] inline std::shared_ptr<service> serve(
+	template<typename... Args>
+	void                          publish(
+		const topic_path &topic,
+		Args&& ...        args)                       {topic.publish(std::forward<Args>(args)...);}
+
+	[[nodiscard]] inline
+	std::shared_ptr<service>      serve(
 		topic                  topic,
 		service_function       handler,
 		service_config         flags = {})            {return topic.serve(std::move(handler), flags);}
 
-	[[nodiscard]] inline std::shared_ptr<service> serve(
+	[[nodiscard]] inline
+	std::shared_ptr<service>      serve(
 		topic                  topic,
 		bound_service_function handler,
 		service_config         flags = {})            {return topic.serve(std::move(handler), flags);}
-	
+
 
 	/*
 		Names like pleb::GET can be used as constants to refer to REST methods
@@ -65,6 +54,16 @@ namespace pleb
 		e.g:  pleb::POST("log/info", log_string);
 		These can also be used in case statements, e.g.  case pleb::POST: break;
 	*/
+#define PLEB_CALLABLE_REQUEST_METHOD(METHOD_NAME) \
+	constexpr class : public pleb::method { using method::method; public: \
+		template<typename... Args> auto operator()(const topic_path &topic, Args&& ... args) const -> \
+		decltype(topic.METHOD_NAME(std::forward<Args>(args)...)) \
+		{return topic.METHOD_NAME(std::forward<Args>(args)...);} \
+	} METHOD_NAME(method_enum::METHOD_NAME)
+
+#define PLEB_NON_CALLABLE_REQUEST_METHOD(METHOD_NAME) \
+	constexpr pleb::method METHOD_NAME(method_enum::METHOD_NAME)
+
 	PLEB_CALLABLE_REQUEST_METHOD(GET);
 	PLEB_CALLABLE_REQUEST_METHOD(HEAD);
 	PLEB_CALLABLE_REQUEST_METHOD(OPTIONS);
@@ -82,14 +81,16 @@ namespace pleb
 	/*
 		Event and request forwarding.
 	*/
-	inline std::shared_ptr<event_relay> forward_events(
+	[[nodiscard]] inline
+	std::shared_ptr<event_relay> forward_events(
 		pleb::topic         from,
 		pleb::topic_path    to,
 		subscription_config flags = {})
 	{
 		return from.forward_events(std::move(to), flags);
 	}
-	inline std::shared_ptr<service_relay> forward_requests(
+	[[nodiscard]] inline
+	std::shared_ptr<service_relay> forward_requests(
 		pleb::topic         from,
 		pleb::topic         to,
 		service_config      flags = {})
