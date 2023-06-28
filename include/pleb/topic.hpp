@@ -30,6 +30,12 @@ namespace pleb
 	
 #define PLEB_ND [[nodiscard]] inline
 
+
+	enum class etc_t {etc};
+
+	static constexpr etc_t etc = etc_t::etc;
+
+
 	/*
 		Resources are used to route all communications through PLEB.
 			Pointers to resources may be stored to keep them alive and
@@ -127,6 +133,9 @@ namespace pleb
 
 			iterator& operator++() noexcept    {_sub = _consume(_sub.data()+_sub.length()); return *this;}
 
+			std::string_view rest_of_path() const    {return std::string_view(_sub.data(), _eos-_sub.data());}
+
+
 		private:
 			const char      *_eos;
 			std::string_view _sub;
@@ -171,6 +180,48 @@ namespace pleb
 		}
 
 
+		/*
+			Attempt to match this topic string against a pattern of arguments.
+				Each argument represents one path part (separated by slash).
+			
+			Arguments function as follows...
+				string_view          ... enforce an exact match with part of the topic.
+				init-list of strings ... match with any of the braced strings.
+				ptr to string type   ... match any string and capture to the pointer destination
+				pleb::etc            ... accept any remaining path segments.
+					etc must be the last argument, or second-last with a final capture pointer.
+		*/
+		template<typename... Args>
+		bool match(std::string_view constant, const Args& ... args) const noexcept
+		{
+			auto i = begin(); if (*i != constant) return false;
+			return topic_view((++i).rest_of_path()).match(args...);
+		}
+		template<typename... Args>
+		bool match(std::initializer_list<std::string_view> options, const Args& ... args) const noexcept
+		{
+			auto i = begin();
+			auto oi = options.begin();
+			for (auto &option : options)
+				if (*i == option) return topic_view((++i).rest_of_path()).match(args...);
+			return false;
+		}
+		template<typename CapturedString, typename... Args>
+		std::enable_if_t<std::is_class_v<CapturedString>, bool>
+			match(CapturedString *capture, const Args& ... args) const noexcept
+		{
+			auto i = begin(); *capture = *i;
+			return topic_view((++i).rest_of_path()).match(args...);
+		}
+
+		bool match()      const noexcept    {return !string.length();}
+
+		bool match(etc_t) const noexcept    {return true;}
+
+		template<typename CapturedString>
+		bool match(etc_t, CapturedString *rest) const noexcept    {*rest = string; return true;}
+
+
 	public:
 		std::string_view string;
 	};
@@ -190,18 +241,6 @@ namespace pleb
 		};
 		using topic_runtime_error = topic_exception<std::runtime_error>;
 		using topic_logic_error = topic_exception<std::logic_error>;
-
-		// Topic fragments are used when brace-initializing a topic from multiple parts.
-		class topic_fragment
-		{
-		public:
-			topic_fragment(const std::string &s)    : str(s) {}
-			topic_fragment(std::string_view   s)    : str(s) {}
-			topic_fragment(const char        *s)    : str(s) {}
-
-		public:
-			std::string_view str;
-		};
 	}
 
 
@@ -388,7 +427,8 @@ namespace pleb
 		topic_(std::string_view   topic)                            : base_t(std::string_view(topic)) {}
 		topic_(const char*        topic)                            : base_t(std::string_view(topic)) {}
 
-		topic_(std::initializer_list<detail::topic_fragment> parts)    {for (auto &p : parts) {_push(p.str);} _resolve();}
+		// Specify a resource using an initializer list, with implied slashes between each item.
+		topic_(std::initializer_list<std::string_view> parts)    {for (auto &p : parts) {_push(p);} _resolve();}
 
 
 		// Convert between topic and topic_path.
@@ -449,6 +489,14 @@ namespace pleb
 		*/
 		operator std::string_view() const noexcept    {return path();}
 		operator std::string     () const noexcept    {return std::string(path());}
+
+
+		/*
+			Match the topic against a pattern, optionally capturing path components.
+				Refer to the match method in topic_view for more information.
+		*/
+		template<typename... Args>
+		bool match(const Args& ... args)    {return topic_view(path()).match(args...);}
 
 
 		/*

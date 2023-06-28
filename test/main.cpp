@@ -189,7 +189,42 @@ int main(int argc, char **argv)
 		}
 	}
 
-	//if (false)
+
+	{
+		const char *match_phrases[] =
+		{
+			"apple/1",
+			"apple/1/core",
+			"apple/1/core/seed",
+			"banana/2",
+			"truck/5"
+		};
+
+		std::cout << "Topic matching test with pattern [fruit]/*" << std::endl;
+		for (auto phrase : match_phrases)
+		{
+			std::cout << "\t" << phrase;
+			std::string_view id;
+			if (pleb::topic_view(phrase).match({"apple", "banana"}, &id))
+				std::cout << " matched with id " << id << std::endl;
+			else
+				std::cout << " did not match" << std::endl;
+		}
+
+		std::cout << "Topic matching test with pattern apple/* ..." << std::endl;
+		for (auto phrase : match_phrases)
+		{
+			std::cout << "\t" << phrase;
+			std::string_view id, rest;
+			if (pleb::topic_view(phrase).match("apple", &id, pleb::etc, &rest))
+				std::cout << " matched with id " << id << ", tail " << rest << std::endl;
+			else
+				std::cout << " did not match" << std::endl;
+		}
+	}
+
+
+	if (false)
 	{
 		auto pool = coop::unmanaged::pool<std::string>();
 
