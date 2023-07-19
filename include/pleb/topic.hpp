@@ -187,7 +187,8 @@ namespace pleb
 			Arguments function as follows...
 				string_view          ... enforce an exact match with part of the topic.
 				init-list of strings ... match with any of the braced strings.
-				ptr to string type   ... match any string and capture to the pointer destination
+				ptr to string type   ... match and capture any string
+				NULL/nullptr         ... match any string without capturing.
 				pleb::etc            ... accept any remaining path segments.
 					etc must be the last argument, or second-last with a final capture pointer.
 		*/
@@ -210,7 +211,14 @@ namespace pleb
 		std::enable_if_t<std::is_class_v<CapturedString>, bool>
 			match(CapturedString *capture, const Args& ... args) const noexcept
 		{
-			auto i = begin(); *capture = *i;
+			auto i = begin();
+			if (capture) *capture = *i;
+			return topic_view((++i).rest_of_path()).match(args...);
+		}
+		template<typename... Args>
+		bool match(std::nullptr_t, const Args& ... args) const noexcept
+		{
+			auto i = begin();
 			return topic_view((++i).rest_of_path()).match(args...);
 		}
 
@@ -296,7 +304,7 @@ namespace pleb
 	template<> class topic_base_<void>
 	{
 	public:
-		topic_base_()  : _node(nullptr) {}
+		topic_base_()  : _node(global_root_resource()) {}
 		~topic_base_() = default;
 
 		topic_base_(std::string_view path) noexcept    : _node(global_root_resource()) {_push(path);}
@@ -428,7 +436,7 @@ namespace pleb
 		topic_(const char*        topic)                            : base_t(std::string_view(topic)) {}
 
 		// Specify a resource using an initializer list, with implied slashes between each item.
-		topic_(std::initializer_list<std::string_view> parts)    {for (auto &p : parts) {_push(p);} _resolve();}
+		topic_(std::initializer_list<std::string_view> parts)    {for (auto &p : parts) {base_t::_push(p);} base_t::_resolve();}
 
 
 		// Convert between topic and topic_path.
@@ -496,7 +504,7 @@ namespace pleb
 				Refer to the match method in topic_view for more information.
 		*/
 		template<typename... Args>
-		bool match(const Args& ... args)    {return topic_view(path()).match(args...);}
+		bool match(const Args& ... args) const    {return topic_view(path()).match(args...);}
 
 
 		/*
