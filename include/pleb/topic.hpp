@@ -691,6 +691,13 @@ namespace pleb
 
 
 		/*
+			Count the number of subscriptions which will receive an event on this topic.
+				This can be used to track if an event would be discarded.
+		*/
+		size_t count_subscriptions(flags::filtering filtering = flags::default_message_filtering) const noexcept;
+
+
+		/*
 			"visit" entities within this resource, via callback.
 				visit_resources invokes for this resource and each of its descendants.
 				visit_services invokes for each service beneath this resource.

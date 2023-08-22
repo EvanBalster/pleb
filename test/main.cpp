@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <thread>
 #include <variant>
 
@@ -203,7 +204,7 @@ int main(int argc, char **argv)
 		std::cout << "Topic matching test with pattern [fruit]/*" << std::endl;
 		for (auto phrase : match_phrases)
 		{
-			std::cout << "\t" << phrase;
+			std::cout << "\t" << std::setw(20) << phrase;
 			std::string_view id;
 			if (pleb::topic_view(phrase).match({"apple", "banana"}, &id))
 				std::cout << " matched with id " << id << std::endl;
@@ -214,10 +215,21 @@ int main(int argc, char **argv)
 		std::cout << "Topic matching test with pattern apple/* ..." << std::endl;
 		for (auto phrase : match_phrases)
 		{
-			std::cout << "\t" << phrase;
+			std::cout << "\t" << std::setw(20) << phrase;
 			std::string_view id, rest;
 			if (pleb::topic_view(phrase).match("apple", &id, pleb::etc, &rest))
 				std::cout << " matched with id " << id << ", tail " << rest << std::endl;
+			else
+				std::cout << " did not match" << std::endl;
+		}
+
+		std::cout << "Topic matching test with pattern apple/*/core" << std::endl;
+		for (auto phrase : match_phrases)
+		{
+			std::cout << "\t" << std::setw(20) << phrase;
+			std::string_view id;
+			if (pleb::topic_view(phrase).match("apple", nullptr, "core"))
+				std::cout << " matched (ignored the ID)" << std::endl;
 			else
 				std::cout << " did not match" << std::endl;
 		}

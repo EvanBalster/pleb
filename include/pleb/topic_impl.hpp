@@ -339,6 +339,35 @@ namespace pleb
 	}
 
 	template<typename P>
+	inline size_t topic_<P>::count_subscriptions(flags::filtering filtering) const noexcept
+	{
+		const topic_<P>  &target = base_t::_resolve();
+		resource_node_ptr node   = target._nearest_node();
+
+		if constexpr (type_can_be_null)
+			null_topic_error::check(node, "can't publish event", "(null topic)");
+
+		const bool recursive = (filtering & flags::recursive);
+		auto filtering = filtering & ~flags::recursive;
+
+		if (target._is_resolved()) goto start_resolved;
+
+		size_t count = 0;
+
+		while (recursive && node)
+		{
+			filtering |= flags::recursive;
+
+		start_resolved:
+			for (subscription &sub : node->subscriptions()) if (sub.accepts(filtering)) ++count;
+
+			node = node->parent();
+		}
+
+		return count;
+	}
+
+	template<typename P>
 	inline service_ptr topic_<P>::current_service() const noexcept
 	{
 		if constexpr (type_can_be_null)
