@@ -348,11 +348,11 @@ namespace pleb
 			null_topic_error::check(node, "can't publish event", "(null topic)");
 
 		const bool recursive = (filtering & flags::recursive);
-		auto filtering = filtering & ~flags::recursive;
+		filtering = filtering & ~flags::recursive;
+		
+		size_t count = 0;
 
 		if (target._is_resolved()) goto start_resolved;
-
-		size_t count = 0;
 
 		while (recursive && node)
 		{
