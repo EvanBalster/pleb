@@ -2,6 +2,7 @@
 
 
 #include <cstdint>
+#include <atomic>
 
 #include "flags.hpp"
 #include "topic.hpp"
@@ -10,6 +11,14 @@
 
 namespace pleb
 {
+	namespace detail
+	{
+		using id_integer_t = uintptr_t;
+
+		template<class C>
+		std::atomic<id_integer_t> id_counter = 1;
+	}
+
 	/*
 		Base class for messages (request, response and event).
 		
@@ -20,11 +29,19 @@ namespace pleb
 	public:
 		using code_t = uint16_t;
 
+		enum class id_t : detail::id_integer_t
+		{
+			no_id = ~detail::id_integer_t(0)
+		};
+		static constexpr id_t no_id = id_t::no_id;
+
 	public:
 		code_t           code;         // Status or method
 		flags::features  features;
 		flags::filtering filtering;    // Affects visibility of message
 		flags::handling  requirements; // Required properties of handler
+
+		id_t             id;           // message ID, unique within the process
 
 		// The topic of the message, which resembles a pathname.
 		topic_path       topic;
@@ -36,6 +53,8 @@ namespace pleb
 		void set_non_recursive() noexcept    {filtering = filtering & flags::filtering(~flags::recursive);}
 		void set_recursive()     noexcept    {filtering = filtering | flags::recursive;}
 
+		static id_t generate_unique_id() noexcept    {return id_t(detail::id_counter<message_base>++);}
+
 
 	public:
 		message_base(
@@ -43,8 +62,9 @@ namespace pleb
 			uint32_t          _code,
 			message_flags     flags)
 			:
-			topic(_topic), code(_code), features(flags::no_features),
-			filtering(flags.filtering), requirements(flags.handling)
+			code(_code), features(flags::no_features),
+			filtering(flags.filtering), requirements(flags.handling),
+			id(generate_unique_id()), topic(_topic)
 			{}
 	};
 
