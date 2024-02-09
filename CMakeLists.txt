@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.18)
+
+include(CMakePackageConfigHelpers)
 
 # specify the C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -13,7 +15,24 @@ find_package (Threads)
 # Library project
 project(pleb)
 
-file(GLOB PLEB_HEADERS include/pleb/*.h)
+file(GLOB_RECURSE pleb.headers include/pleb/*.hpp include/pleb/*.h)
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/include/pleb PREFIX pleb FILES ${pleb.headers})
+
+add_library(pleb INTERFACE)
+
+target_sources(pleb
+    PUBLIC FILE_SET HEADERS
+        BASE_DIRS ${PROJECT_SOURCE_DIR}/include
+        FILES ${pleb.headers})
+
+configure_package_config_file(
+    pleb-config.cmake.in
+    pleb-config.cmake
+    INSTALL_DESTINATION lib/pleb)
+install(TARGETS pleb EXPORT pleb-targets FILE_SET HEADERS)
+install(             EXPORT pleb-targets                    DESTINATION lib/pleb)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/pleb-config.cmake DESTINATION lib/pleb)
 
 #add_library(pleb STATIC ${TELLING_HEADERS})
 #target_include_directories(pleb PUBLIC "include")
@@ -23,8 +42,8 @@ file(GLOB PLEB_HEADERS include/pleb/*.h)
 project(pleb_test)
 
 # add the executable
-file(GLOB TEST_SOURCES test/*.*)
-add_executable(pleb_test ${PLEB_HEADERS} ${TEST_SOURCES})
+file(GLOB pleb-test.sources test/*.*)
+add_executable(pleb_test ${pleb.headers} ${pleb-test.sources})
 
 target_include_directories(pleb_test PUBLIC "include")
 
