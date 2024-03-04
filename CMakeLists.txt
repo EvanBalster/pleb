@@ -29,10 +29,10 @@ target_sources(pleb
 configure_package_config_file(
     pleb-config.cmake.in
     pleb-config.cmake
-    INSTALL_DESTINATION lib/pleb)
+    INSTALL_DESTINATION lib/cmake/pleb)
 install(TARGETS pleb EXPORT pleb-targets FILE_SET HEADERS)
-install(             EXPORT pleb-targets                    DESTINATION lib/pleb)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/pleb-config.cmake DESTINATION lib/pleb)
+install(             EXPORT pleb-targets                    DESTINATION lib/cmake/pleb)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/pleb-config.cmake DESTINATION lib/cmake/pleb)
 
 #add_library(pleb STATIC ${TELLING_HEADERS})
 #target_include_directories(pleb PUBLIC "include")
