@@ -155,7 +155,9 @@ int main(int argc, char **argv)
 		any int_holder;
 		for (int tries = 0; tries < 2; ++tries)
 		{
-			std::cout << "Requesting post_int" << std::endl;
+			std::cout << "Requesting post_int (value: "
+				<< (int_holder.has_value() ? "13" : "none")
+				<< ")" << std::endl;
 			pleb::POST("test/int", client, int_holder);
 			int_holder = 13;
 			std::cout << "\tRequest now holds " << int_holder.type().name()
