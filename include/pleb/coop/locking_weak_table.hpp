@@ -53,16 +53,34 @@ namespace coop
 		{
 			using type = std::string_view;
 #if __cplusplus >= 202000 || _MSVC_LANG >= 202000
-			static const std::string_view& view(const std::string_view &t) noexcept    {return t;}
+			static const std::string_view view(const std::string_view &t) noexcept    {return t;}
 #else
 			static std::string view(std::string_view t) noexcept    {return std::string(t);}
 #endif
 		};
+
+#if __cplusplus >= 202000 || _MSVC_LANG >= 202000
+		template<typename T>
+		struct table_hash : public std::hash<T> {};
+
+		template<>
+		struct table_hash<std::string> : public std::hash<std::string_view>
+		{
+			using is_transparent = void;
+			
+			[[nodiscard]] size_t operator()(const char      *v) const noexcept    {return hash::operator()(v);}
+			[[nodiscard]] size_t operator()(std::string_view v) const noexcept    {return hash::operator()(v);}
+			[[nodiscard]] auto operator()(const std::string &v) const noexcept    {return hash::operator()(v);}
+			//[[nodiscard]] auto operator()(const std::string_view &v) const noexcept    {return hash::operator()(v);}
+		};
+#else
+		template<typename T> using table_hash = std::hash<T>;
+#endif
 	}
 
 
 
-	template<typename Key, typename Value, typename Hash = std::hash<Key>>
+	template<typename Key, typename Value, typename Hash = detail::table_hash<Key>>
 	class locking_weak_table
 	{
 	public:
@@ -117,7 +135,8 @@ namespace coop
 			{
 				unique_lock lock(_mtx);
 				auto make = std::make_shared<ConstructorType>(std::forward<Args>(args) ...);
-				_map[detail::key_view<key_type>::view(key)] = make;
+				auto ins = _map.emplace(key, make);
+				if (!ins.second) ins.first->second = make;
 				return make;
 			}
 		}
@@ -126,9 +145,10 @@ namespace coop
 		bool try_insert(key_reference key, std::shared_ptr<value_type> ptr)
 		{
 			unique_lock lock(_mtx);
-			auto &elem = _map[detail::key_view<key_type>::view(key)];
-			if (elem.expired()) {elem = std::move(ptr); return true;}
-			else                                        return false;
+			auto i = _map.find(detail::key_view<key_type>::view(key));
+			if (i==_map.end()) {_map.emplace(key, ptr); return true;}
+			else if (!i->second.expired())             {return false;}
+			else           {i->second = std::move(ptr); return true;}
 		}
 
 
@@ -152,7 +172,7 @@ namespace coop
 
 
 	private:
-		using _map_t = std::unordered_map<key_type, std::weak_ptr<value_type>, Hash>;
+		using _map_t = std::unordered_map<key_type, std::weak_ptr<value_type>, Hash, std::equal_to<>>;
 		mutable std_shared_mutex _mtx;
 		_map_t                   _map;
 
